@@ -1,7 +1,8 @@
-﻿namespace Application.Interface
+﻿namespace Application.Interface;
+
+internal interface IProgram
 {
-    internal interface IProgram
-    {
-        void Run();
-    }
+    string Name { get; }
+
+    void Run();
 }

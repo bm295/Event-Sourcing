@@ -1,28 +1,30 @@
 ﻿using Application.Interface;
 
-namespace Application.Implementation
+namespace Application.Implementation;
+
+internal sealed class AutoResetEventProgram : IProgram
 {
-    internal class AutoResetEventProgram : IProgram
+    private readonly AutoResetEvent _autoEvent = new(initialState: false);
+
+    public string Name => "AutoResetEvent Demo";
+
+    public void Run()
     {
-        readonly AutoResetEvent autoEvent = new(false);
+        Task.Run(() => CalculateSum(maxNumber: 50));
+        Thread.Sleep(millisecondsTimeout: 3000);
+        _autoEvent.Set();
+    }
 
-        public void Run()
+    private void CalculateSum(int maxNumber)
+    {
+        var sum = 0;
+        for (var i = 0; i <= maxNumber; i++)
         {
-            Task.Factory.StartNew(() => CalculateSum(50));
-            Thread.Sleep(3000);
-            autoEvent.Set();
+            sum += i;
         }
 
-        private void CalculateSum(int maxNumber)
-        {
-            int sum = 0;
-            for (int i = 0; i <= maxNumber; i++)
-            {
-                sum += i;
-            }
-            Console.WriteLine("Sum Calculated. Waiting for Main thread to send signal to unblock me");
-            autoEvent.WaitOne();
-            Console.WriteLine("Sum: " + sum);
-        }
+        Console.WriteLine("Sum calculated. Waiting for main thread signal...");
+        _autoEvent.WaitOne();
+        Console.WriteLine($"Sum: {sum}");
     }
 }

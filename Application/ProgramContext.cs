@@ -1,37 +1,32 @@
 ﻿using Application.Implementation;
 using Application.Interface;
-using StructureMap;
 
-namespace Application
+namespace Application;
+
+internal sealed class ProgramContext
 {
-    internal class ProgramContext
+    private readonly IReadOnlyList<IProgram> _programs =
+    [
+        new AutoResetEventProgram(),
+        new IsAssignableFromProgram()
+    ];
+
+    internal void ShowAllOptions()
     {
-        private List<IProgram> _programs;
-
-        public ProgramContext()
+        for (var i = 0; i < _programs.Count; i++)
         {
-            var container = new Container(_ => {
-                _.For<IProgram>().Use<AutoResetEventProgram>();
-                _.For<IProgram>().Use<IsAssignableFromProgram>();
-            });
+            Console.WriteLine($"Option {i}: {_programs[i].Name}");
+        }
+    }
 
-            _programs = new List<IProgram> {
-                container.GetInstance<AutoResetEventProgram>(),
-                container.GetInstance<IsAssignableFromProgram>()
-            };
+    internal void RunWith(int option)
+    {
+        if (option < 0 || option >= _programs.Count)
+        {
+            Console.WriteLine("Option out of range.");
+            return;
         }
 
-        internal void ShowAllOptions()
-        {
-            for (var i = 0; i < _programs.Count; i++)
-            {
-                Console.WriteLine($"Option {i}: {_programs[i].GetType().Name}");
-            }
-        }
-
-        internal void RunWith(int option)
-        {
-            _programs[option].Run();
-        }
+        _programs[option].Run();
     }
 }
