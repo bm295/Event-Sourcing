@@ -3,6 +3,11 @@
 var programContext = new ProgramContext();
 programContext.ShowAllOptions();
 
-Console.Write("Enter option:");
-var option = Convert.ToInt32(Console.ReadLine());
+Console.Write("Enter option: ");
+if (!int.TryParse(Console.ReadLine(), out var option))
+{
+    Console.WriteLine("Invalid option.");
+    return;
+}
+
 programContext.RunWith(option);

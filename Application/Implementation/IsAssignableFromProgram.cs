@@ -1,54 +1,34 @@
 ﻿using Application.Interface;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Application.Implementation
+namespace Application.Implementation;
+
+internal sealed class IsAssignableFromProgram : IProgram
 {
-    internal class IsAssignableFromProgram : IProgram
+    public string Name => "Type.IsAssignableFrom Demo";
+
+    public void Run()
     {
-        public void Run()
-        {
-            // Demonstrate classes:
-            Console.WriteLine("Defined Classes:");
-            Room room1 = new Room();
-            Kitchen kitchen1 = new Kitchen();
-            Bedroom bedroom1 = new Bedroom();
-            Guestroom guestroom1 = new Guestroom();
-            MasterBedroom masterbedroom1 = new MasterBedroom();
+        Console.WriteLine("Defined classes:");
 
-            Type room1Type = room1.GetType();
-            Type kitchen1Type = kitchen1.GetType();
-            Type bedroom1Type = bedroom1.GetType();
-            Type guestroom1Type = guestroom1.GetType();
-            Type masterbedroom1Type = masterbedroom1.GetType();
+        var roomType = typeof(Room);
+        var kitchenType = typeof(Kitchen);
+        var bedroomType = typeof(Bedroom);
+        var guestroomType = typeof(Guestroom);
+        var masterBedroomType = typeof(MasterBedroom);
 
-            Console.WriteLine("room assignable from kitchen: {0}", room1Type.IsAssignableFrom(kitchen1Type));
-            Console.WriteLine("bedroom assignable from guestroom: {0}", bedroom1Type.IsAssignableFrom(guestroom1Type));
-            Console.WriteLine("kitchen assignable from masterbedroom: {0}", kitchen1Type.IsAssignableFrom(masterbedroom1Type));
-            Console.WriteLine("room assignable from guestroom: {0}", room1Type.IsAssignableFrom(guestroom1Type));
-        }
-    }
-
-    internal class MasterBedroom : Bedroom
-    {
-    }
-
-    internal class Guestroom : Bedroom
-    {
-    }
-
-    internal class Bedroom : Room
-    {
-    }
-
-    internal class Kitchen :Room
-    {
-    }
-
-    internal class Room
-    {
+        Console.WriteLine("room assignable from kitchen: {0}", roomType.IsAssignableFrom(kitchenType));
+        Console.WriteLine("bedroom assignable from guestroom: {0}", bedroomType.IsAssignableFrom(guestroomType));
+        Console.WriteLine("kitchen assignable from masterbedroom: {0}", kitchenType.IsAssignableFrom(masterBedroomType));
+        Console.WriteLine("room assignable from guestroom: {0}", roomType.IsAssignableFrom(guestroomType));
     }
 }
+
+internal class MasterBedroom : Bedroom;
+
+internal class Guestroom : Bedroom;
+
+internal class Bedroom : Room;
+
+internal class Kitchen : Room;
+
+internal class Room;
