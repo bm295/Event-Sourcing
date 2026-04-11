@@ -1,9 +1,9 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.32319.34
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "Application\Application.csproj", "{B86A75B0-8D16-4AC1-BB73-A3509ADB5224}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventSourcingBankAccountWeb", "src\EventSourcingBankAccountWeb\EventSourcingBankAccountWeb.csproj", "{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +11,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{B86A75B0-8D16-4AC1-BB73-A3509ADB5224}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B86A75B0-8D16-4AC1-BB73-A3509ADB5224}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B86A75B0-8D16-4AC1-BB73-A3509ADB5224}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B86A75B0-8D16-4AC1-BB73-A3509ADB5224}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

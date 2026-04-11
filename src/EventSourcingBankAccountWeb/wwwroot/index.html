@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event-Sourced Bank Account Web Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Event Flow Demo</p>
+        <h1>Event-Sourced Bank Account</h1>
+        <p class="hero-copy">Execute commands, inspect components, and view persisted events with statuses like a database table.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span class="stat-label">Balance</span>
+          <strong id="balance">$0.00</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Account</span>
+          <strong id="account-status">Closed</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel command-panel">
+        <div class="panel-header">
+          <h2>Commands</h2>
+          <button id="reset-button" class="secondary">Reset</button>
+        </div>
+        <label>
+          Owner name
+          <input id="owner-name" type="text" value="Demo User">
+        </label>
+        <label>
+          Amount
+          <input id="amount" type="number" min="0" step="0.01" value="25">
+        </label>
+        <div class="command-grid">
+          <button data-command="OpenAccount">Open Account</button>
+          <button data-command="DepositMoney">Deposit Money</button>
+          <button data-command="WithdrawMoney">Withdraw Money</button>
+          <button id="replay-button" class="secondary">Replay Events</button>
+        </div>
+        <p id="message" class="message"></p>
+      </section>
+
+      <section class="panel diagram-panel">
+        <div class="panel-header">
+          <h2>Component Flow</h2>
+          <span id="last-updated" class="subtle"></span>
+        </div>
+        <div id="component-diagram" class="diagram"></div>
+      </section>
+
+      <section class="panel inspector-panel">
+        <div class="panel-header">
+          <h2>Flow Inspector</h2>
+        </div>
+        <div id="component-detail" class="detail-card"></div>
+      </section>
+
+      <section class="panel flow-panel">
+        <div class="panel-header">
+          <h2>Latest Flow</h2>
+        </div>
+        <ol id="flow-steps" class="flow-steps"></ol>
+      </section>
+
+      <section class="panel events-panel">
+        <div class="panel-header">
+          <h2>Event Store View</h2>
+          <span class="subtle">Database-style rows</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Seq</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Event Id</th>
+              </tr>
+            </thead>
+            <tbody id="event-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel event-detail-panel">
+        <div class="panel-header">
+          <h2>Selected Event</h2>
+        </div>
+        <div id="event-detail" class="detail-card"></div>
+      </section>
+
+      <section class="panel history-panel">
+        <div class="panel-header">
+          <h2>Read Model</h2>
+        </div>
+        <ul id="history-list" class="history-list"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
