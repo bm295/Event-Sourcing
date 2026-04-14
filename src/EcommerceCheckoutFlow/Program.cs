@@ -6,12 +6,10 @@ using EcommerceCheckoutFlow.Application.Handlers;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Application.UseCases;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 Console.WriteLine("=== Hexagonal + Event-Driven E-Commerce Demo (CAP) ===");
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 var sqliteConnection = builder.Configuration["CHECKOUT_DB_CONNECTION"]
     ?? "Data Source=ecommerce-checkout.db";
@@ -21,6 +19,7 @@ var rabbitUser = builder.Configuration["CAP_RABBITMQ_USER"] ?? "guest";
 var rabbitPass = builder.Configuration["CAP_RABBITMQ_PASS"] ?? "guest";
 
 builder.Services.AddDbContext<EcommerceDbContext>(options => options.UseSqlite(sqliteConnection));
+builder.Services.AddControllers();
 
 builder.Services
     .AddSingleton<InMemoryInventoryAdapter>()
@@ -62,27 +61,25 @@ builder.Services.AddCap(capOptions =>
     });
 });
 
-using var host = builder.Build();
+var app = builder.Build();
 
-using (var scope = host.Services.CreateScope())
+using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<EcommerceDbContext>();
     await dbContext.Database.EnsureCreatedAsync();
 }
 
-await host.StartAsync();
-
-var cliAdapter = host.Services.GetRequiredService<CheckoutCliAdapter>();
+var cliAdapter = app.Services.GetRequiredService<CheckoutCliAdapter>();
 await cliAdapter.RunDemoAsync();
 
 // CAP subscribers run in background hosted services.
 await Task.Delay(300);
 
-var inventoryAdapter = host.Services.GetRequiredService<InMemoryInventoryAdapter>();
-var paymentAdapter = host.Services.GetRequiredService<InMemoryPaymentAdapter>();
-var shippingAdapter = host.Services.GetRequiredService<InMemoryShippingAdapter>();
-var analyticsAdapter = host.Services.GetRequiredService<InMemoryAnalyticsAdapter>();
-var notificationAdapter = host.Services.GetRequiredService<ConsoleNotificationAdapter>();
+var inventoryAdapter = app.Services.GetRequiredService<InMemoryInventoryAdapter>();
+var paymentAdapter = app.Services.GetRequiredService<InMemoryPaymentAdapter>();
+var shippingAdapter = app.Services.GetRequiredService<InMemoryShippingAdapter>();
+var analyticsAdapter = app.Services.GetRequiredService<InMemoryAnalyticsAdapter>();
+var notificationAdapter = app.Services.GetRequiredService<ConsoleNotificationAdapter>();
 
 Console.WriteLine();
 Console.WriteLine("=== Projection / Adapter State ===");
@@ -93,4 +90,5 @@ Console.WriteLine($"Orders tracked: {analyticsAdapter.OrdersTracked}");
 Console.WriteLine($"Revenue tracked: ${analyticsAdapter.RevenueTracked}");
 Console.WriteLine($"Notifications sent: {notificationAdapter.SentMessages}");
 
-await host.StopAsync();
+app.MapControllers();
+await app.RunAsync();

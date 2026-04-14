@@ -13,6 +13,7 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
   - `Handlers/` for event-driven orchestration logic.
 - `Adapters/Primary/`
   - `CheckoutCliAdapter` as the driving adapter (entry point interaction).
+  - `PublishController` exposes HTTP routes `~/send` and `~/send/delay` for CAP publish examples.
 - `Adapters/Secondary/`
   - In-memory implementations for inventory, payment, shipping, analytics, notifications.
   - `CapEventBus` implementation (`IEventBus`) to publish domain events with CAP.
