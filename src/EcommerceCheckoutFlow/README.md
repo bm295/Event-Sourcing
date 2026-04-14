@@ -1,6 +1,6 @@
 # EcommerceCheckoutFlow (Hexagonal + Event-Driven E-Commerce + CAP)
 
-This project demonstrates how to apply **hexagonal architecture (ports and adapters)** together with an **event-driven workflow** in an e-commerce checkout domain, using **[CAP](https://cap.dotnetcore.xyz/)** as the event bus.
+This project demonstrates how to apply **hexagonal architecture (ports and adapters)** together with an **event-driven workflow** in an e-commerce checkout domain, using **[CAP](https://cap.dotnetcore.xyz/)** as the event bus and local message table implementation.
 
 ## Structure
 
@@ -16,11 +16,22 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 - `Adapters/Secondary/`
   - In-memory implementations for inventory, payment, shipping, analytics, notifications.
   - `CapEventBus` implementation (`IEventBus`) to publish domain events with CAP.
+  - `Persistence/EcommerceDbContext` for order write persistence.
+
+## Reliability configuration (CAP local message table)
+
+- CAP storage is backed by SQLite (`UseSqlite`) instead of in-memory storage.
+- Checkout writes business data (`orders` table) and publishes `OrderPlaced` within the same CAP transaction boundary (`BeginTransaction(capPublisher, ...)`).
+- Transport is RabbitMQ (`UseRabbitMQ`) and can be configured via env vars:
+  - `CAP_RABBITMQ_HOST` (default `localhost`)
+  - `CAP_RABBITMQ_USER` (default `guest`)
+  - `CAP_RABBITMQ_PASS` (default `guest`)
+- Business DB connection is configurable via `CHECKOUT_DB_CONNECTION` (default `Data Source=ecommerce-checkout.db`).
 
 ## Event flow
 
 1. Primary adapter calls `CheckoutUseCase.PlaceOrderAsync(...)`.
-2. Use case publishes `OrderPlaced` through `IEventBus` (`CapEventBus` → CAP topic).
+2. Use case stores order data and publishes `OrderPlaced` in one CAP transaction.
 3. CAP subscribers (`[CapSubscribe]`) react independently:
    - inventory reservation,
    - payment authorization (then publishes `PaymentAuthorized`),
@@ -33,4 +44,3 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 - Domain and use cases depend on **ports**, not concrete infrastructure.
 - Adapters implement ports and can be replaced (DB, message broker, payment provider, etc.) without changing domain/application rules.
 - Event handlers keep cross-component coordination decoupled and extensible.
-- CAP allows replacing in-memory queue/storage with real broker/storage providers later (Kafka, RabbitMQ, SQL, etc.).
