@@ -1,3 +1,5 @@
+using DotNetCore.CAP;
+using EcommerceCheckoutFlow.Application;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Domain;
 
@@ -5,7 +7,8 @@ namespace EcommerceCheckoutFlow.Application.Handlers;
 
 public sealed class ShippingOnPaymentAuthorizedHandler(IShippingPort shippingPort, IEventBus eventBus)
 {
-    public void Handle(PaymentAuthorized @event)
+    [CapSubscribe(EventTopics.PaymentAuthorized)]
+    public async Task HandleAsync(PaymentAuthorized @event)
     {
         shippingPort.Prepare(@event);
 
@@ -15,12 +18,16 @@ public sealed class ShippingOnPaymentAuthorizedHandler(IShippingPort shippingPor
             packageCount: 1,
             DateTimeOffset.UtcNow);
 
-        eventBus.Publish(shipmentPrepared);
+        await eventBus.PublishAsync(shipmentPrepared);
     }
 }
 
 public sealed class NotifyOnPaymentAuthorizedHandler(INotificationPort notificationPort)
 {
-    public void Handle(PaymentAuthorized @event) =>
+    [CapSubscribe(EventTopics.PaymentAuthorized)]
+    public Task HandleAsync(PaymentAuthorized @event)
+    {
         notificationPort.Send($"Payment authorized for order {@event.OrderId}.");
+        return Task.CompletedTask;
+    }
 }

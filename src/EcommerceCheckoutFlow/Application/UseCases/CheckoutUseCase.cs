@@ -5,7 +5,11 @@ namespace EcommerceCheckoutFlow.Application.UseCases;
 
 public sealed class CheckoutUseCase(IEventBus eventBus)
 {
-    public void PlaceOrder(string orderId, string customerId, IReadOnlyList<CartItem> items)
+    public Task PlaceOrderAsync(
+        string orderId,
+        string customerId,
+        IReadOnlyList<CartItem> items,
+        CancellationToken cancellationToken = default)
     {
         var order = Order.Create(orderId, customerId, items);
 
@@ -16,6 +20,6 @@ public sealed class CheckoutUseCase(IEventBus eventBus)
             order.TotalAmount,
             DateTimeOffset.UtcNow);
 
-        eventBus.Publish(orderPlaced);
+        return eventBus.PublishAsync(orderPlaced, cancellationToken);
     }
 }

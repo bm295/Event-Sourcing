@@ -1,41 +1,61 @@
+using DotNetCore.CAP;
 using EcommerceCheckoutFlow.Adapters.Primary;
 using EcommerceCheckoutFlow.Adapters.Secondary;
 using EcommerceCheckoutFlow.Application.Handlers;
+using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Application.UseCases;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
-Console.WriteLine("=== Hexagonal + Event-Driven E-Commerce Demo ===");
+Console.WriteLine("=== Hexagonal + Event-Driven E-Commerce Demo (CAP) ===");
 
-// Secondary adapters (infrastructure implementations of outbound ports).
-var inventoryAdapter = new InMemoryInventoryAdapter();
-var paymentAdapter = new InMemoryPaymentAdapter();
-var shippingAdapter = new InMemoryShippingAdapter();
-var analyticsAdapter = new InMemoryAnalyticsAdapter();
-var notificationAdapter = new ConsoleNotificationAdapter();
+var builder = Host.CreateApplicationBuilder(args);
 
-var eventBus = new InMemoryEventBus();
+builder.Services
+    .AddSingleton<InMemoryInventoryAdapter>()
+    .AddSingleton<InMemoryPaymentAdapter>()
+    .AddSingleton<InMemoryShippingAdapter>()
+    .AddSingleton<InMemoryAnalyticsAdapter>()
+    .AddSingleton<ConsoleNotificationAdapter>();
 
-// Application services / use cases.
-var checkoutUseCase = new CheckoutUseCase(eventBus);
+builder.Services
+    .AddSingleton<IInventoryPort>(sp => sp.GetRequiredService<InMemoryInventoryAdapter>())
+    .AddSingleton<IPaymentPort>(sp => sp.GetRequiredService<InMemoryPaymentAdapter>())
+    .AddSingleton<IShippingPort>(sp => sp.GetRequiredService<InMemoryShippingAdapter>())
+    .AddSingleton<IAnalyticsPort>(sp => sp.GetRequiredService<InMemoryAnalyticsAdapter>())
+    .AddSingleton<INotificationPort>(sp => sp.GetRequiredService<ConsoleNotificationAdapter>());
 
-// Application event handlers.
-var inventoryHandler = new InventoryOnOrderPlacedHandler(inventoryAdapter);
-var paymentHandler = new PaymentOnOrderPlacedHandler(paymentAdapter, eventBus);
-var analyticsHandler = new AnalyticsOnOrderPlacedHandler(analyticsAdapter);
-var shippingHandler = new ShippingOnPaymentAuthorizedHandler(shippingAdapter, eventBus);
-var paymentNotificationHandler = new NotifyOnPaymentAuthorizedHandler(notificationAdapter);
-var shipmentNotificationHandler = new NotifyOnShipmentPreparedHandler(notificationAdapter);
+builder.Services
+    .AddSingleton<IEventBus, CapEventBus>()
+    .AddSingleton<CheckoutUseCase>()
+    .AddSingleton<CheckoutCliAdapter>()
+    .AddSingleton<InventoryOnOrderPlacedHandler>()
+    .AddSingleton<PaymentOnOrderPlacedHandler>()
+    .AddSingleton<AnalyticsOnOrderPlacedHandler>()
+    .AddSingleton<ShippingOnPaymentAuthorizedHandler>()
+    .AddSingleton<NotifyOnPaymentAuthorizedHandler>()
+    .AddSingleton<NotifyOnShipmentPreparedHandler>();
 
-// Wiring events (domain/application boundary stays decoupled through ports + events).
-eventBus.Subscribe<EcommerceCheckoutFlow.Domain.OrderPlaced>(inventoryHandler.Handle);
-eventBus.Subscribe<EcommerceCheckoutFlow.Domain.OrderPlaced>(paymentHandler.Handle);
-eventBus.Subscribe<EcommerceCheckoutFlow.Domain.OrderPlaced>(analyticsHandler.Handle);
-eventBus.Subscribe<EcommerceCheckoutFlow.Domain.PaymentAuthorized>(shippingHandler.Handle);
-eventBus.Subscribe<EcommerceCheckoutFlow.Domain.PaymentAuthorized>(paymentNotificationHandler.Handle);
-eventBus.Subscribe<EcommerceCheckoutFlow.Domain.ShipmentPrepared>(shipmentNotificationHandler.Handle);
+builder.Services.AddCap(capOptions =>
+{
+    capOptions.UseInMemoryQueue();
+    capOptions.UseInMemoryStorage();
+});
 
-// Primary adapter triggers the use case.
-var cliAdapter = new CheckoutCliAdapter(checkoutUseCase);
-cliAdapter.RunDemo();
+using var host = builder.Build();
+await host.StartAsync();
+
+var cliAdapter = host.Services.GetRequiredService<CheckoutCliAdapter>();
+await cliAdapter.RunDemoAsync();
+
+// CAP subscribers run in background hosted services.
+await Task.Delay(300);
+
+var inventoryAdapter = host.Services.GetRequiredService<InMemoryInventoryAdapter>();
+var paymentAdapter = host.Services.GetRequiredService<InMemoryPaymentAdapter>();
+var shippingAdapter = host.Services.GetRequiredService<InMemoryShippingAdapter>();
+var analyticsAdapter = host.Services.GetRequiredService<InMemoryAnalyticsAdapter>();
+var notificationAdapter = host.Services.GetRequiredService<ConsoleNotificationAdapter>();
 
 Console.WriteLine();
 Console.WriteLine("=== Projection / Adapter State ===");
@@ -45,3 +65,5 @@ Console.WriteLine($"Shipments prepared: {shippingAdapter.ShipmentsPrepared}");
 Console.WriteLine($"Orders tracked: {analyticsAdapter.OrdersTracked}");
 Console.WriteLine($"Revenue tracked: ${analyticsAdapter.RevenueTracked}");
 Console.WriteLine($"Notifications sent: {notificationAdapter.SentMessages}");
+
+await host.StopAsync();
