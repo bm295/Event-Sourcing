@@ -39,6 +39,7 @@ builder.Services
 builder.Services
     .AddSingleton<IEventBus, CapEventBus>()
     .AddSingleton<CheckoutUseCase>()
+    .AddSingleton<DemoOrderFactory>()
     .AddSingleton<CheckoutCliAdapter>()
     .AddSingleton<InventoryOnOrderPlacedHandler>()
     .AddSingleton<PaymentOnOrderPlacedHandler>()
