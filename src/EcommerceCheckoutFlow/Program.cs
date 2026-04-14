@@ -1,15 +1,26 @@
 using DotNetCore.CAP;
 using EcommerceCheckoutFlow.Adapters.Primary;
 using EcommerceCheckoutFlow.Adapters.Secondary;
+using EcommerceCheckoutFlow.Adapters.Secondary.Persistence;
 using EcommerceCheckoutFlow.Application.Handlers;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Application.UseCases;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 Console.WriteLine("=== Hexagonal + Event-Driven E-Commerce Demo (CAP) ===");
 
 var builder = Host.CreateApplicationBuilder(args);
+
+var sqliteConnection = builder.Configuration["CHECKOUT_DB_CONNECTION"]
+    ?? "Data Source=ecommerce-checkout.db";
+
+var rabbitHost = builder.Configuration["CAP_RABBITMQ_HOST"] ?? "localhost";
+var rabbitUser = builder.Configuration["CAP_RABBITMQ_USER"] ?? "guest";
+var rabbitPass = builder.Configuration["CAP_RABBITMQ_PASS"] ?? "guest";
+
+builder.Services.AddDbContext<EcommerceDbContext>(options => options.UseSqlite(sqliteConnection));
 
 builder.Services
     .AddSingleton<InMemoryInventoryAdapter>()
@@ -38,11 +49,26 @@ builder.Services
 
 builder.Services.AddCap(capOptions =>
 {
-    capOptions.UseInMemoryQueue();
-    capOptions.UseInMemoryStorage();
+    capOptions.UseEntityFramework<EcommerceDbContext>();
+    capOptions.UseSqlite(sqliteConnection);
+
+    capOptions.UseRabbitMQ(options =>
+    {
+        options.HostName = rabbitHost;
+        options.UserName = rabbitUser;
+        options.Password = rabbitPass;
+        options.VirtualHost = "/";
+    });
 });
 
 using var host = builder.Build();
+
+using (var scope = host.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<EcommerceDbContext>();
+    await dbContext.Database.EnsureCreatedAsync();
+}
+
 await host.StartAsync();
 
 var cliAdapter = host.Services.GetRequiredService<CheckoutCliAdapter>();

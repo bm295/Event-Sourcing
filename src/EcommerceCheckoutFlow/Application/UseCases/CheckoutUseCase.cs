@@ -1,11 +1,13 @@
-using EcommerceCheckoutFlow.Application.Ports;
+using DotNetCore.CAP;
+using EcommerceCheckoutFlow.Adapters.Secondary.Persistence;
+using EcommerceCheckoutFlow.Application;
 using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.UseCases;
 
-public sealed class CheckoutUseCase(IEventBus eventBus)
+public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher capPublisher)
 {
-    public Task PlaceOrderAsync(
+    public async Task PlaceOrderAsync(
         string orderId,
         string customerId,
         IReadOnlyList<CartItem> items,
@@ -20,6 +22,13 @@ public sealed class CheckoutUseCase(IEventBus eventBus)
             order.TotalAmount,
             DateTimeOffset.UtcNow);
 
-        return eventBus.PublishAsync(orderPlaced, cancellationToken);
+        using var transaction = dbContext.Database.BeginTransaction(capPublisher, autoCommit: false);
+
+        dbContext.Orders.Add(OrderRecord.From(order));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        await capPublisher.PublishAsync(EventTopics.OrderPlaced, orderPlaced, cancellationToken: cancellationToken);
+
+        transaction.Commit();
     }
 }
