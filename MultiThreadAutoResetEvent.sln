@@ -5,6 +5,8 @@ VisualStudioVersion = 17.1.32319.34
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventSourcingBankAccountWeb", "src\EventSourcingBankAccountWeb\EventSourcingBankAccountWeb.csproj", "{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EcommerceCheckoutFlow", "src\EcommerceCheckoutFlow\EcommerceCheckoutFlow.csproj", "{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D4119E4D-A3F8-4F3D-95B3-59A8C7EF4CC5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
