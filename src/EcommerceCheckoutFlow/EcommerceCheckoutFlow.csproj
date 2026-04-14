@@ -5,4 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="DotNetCore.CAP" Version="*" />
+    <PackageReference Include="Savorboard.CAP.InMemoryMessageQueue" Version="*" />
+    <PackageReference Include="Savorboard.CAP.InMemoryStorage" Version="*" />
+  </ItemGroup>
 </Project>
