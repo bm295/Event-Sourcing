@@ -24,22 +24,32 @@ public sealed class PaymentOnOrderPlacedHandler(IPaymentPort paymentPort, IEvent
         {
             paymentPort.Authorize(@event);
 
+            var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), @event);
             var paymentAuthorized = new PaymentAuthorized(
-                @event.OrderId,
+                metadata.EventId,
+                metadata.OccurredAt,
+                metadata.CorrelationId,
+                metadata.CausationId,
+                metadata.EventType,
+                metadata.OrderId,
                 @event.CustomerId,
-                @event.TotalAmount,
-                DateTimeOffset.UtcNow);
+                @event.TotalAmount);
 
             await eventBus.PublishAsync(paymentAuthorized);
         }
         catch (Exception ex)
         {
+            var metadata = EventMetadata.NewChild(nameof(PaymentFailed), @event);
             var paymentFailed = new PaymentFailed(
-                @event.OrderId,
+                metadata.EventId,
+                metadata.OccurredAt,
+                metadata.CorrelationId,
+                metadata.CausationId,
+                metadata.EventType,
+                metadata.OrderId,
                 @event.CustomerId,
                 @event.TotalAmount,
-                ex.Message,
-                DateTimeOffset.UtcNow);
+                ex.Message);
 
             await eventBus.PublishAsync(paymentFailed);
         }

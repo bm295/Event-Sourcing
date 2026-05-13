@@ -12,11 +12,16 @@ public sealed class ShippingOnPaymentAuthorizedHandler(IShippingPort shippingPor
     {
         shippingPort.Prepare(@event);
 
+        var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), @event);
         var shipmentPrepared = new ShipmentPrepared(
-            @event.OrderId,
+            metadata.EventId,
+            metadata.OccurredAt,
+            metadata.CorrelationId,
+            metadata.CausationId,
+            metadata.EventType,
+            metadata.OrderId,
             @event.CustomerId,
-            packageCount: 1,
-            DateTimeOffset.UtcNow);
+            packageCount: 1);
 
         await eventBus.PublishAsync(shipmentPrepared);
     }
