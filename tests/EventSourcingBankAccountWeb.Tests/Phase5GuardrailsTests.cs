@@ -46,6 +46,9 @@ public sealed class Phase5GuardrailsTests
 
         var invalid = new MoneyDeposited("e3", "acc-1", 2, now.AddMinutes(2), 20m);
         Assert.Throws<EventStoreConcurrencyException>(() => store.Append(invalid, expectedSequence: 2));
+
+        var outOfOrder = new MoneyDeposited("e4", "acc-1", 4, now.AddMinutes(3), 20m);
+        Assert.Throws<EventStoreConcurrencyException>(() => store.Append(outOfOrder, expectedSequence: 2));
     }
 
     [Fact]
@@ -155,6 +158,41 @@ public sealed class Phase5GuardrailsTests
         Assert.DoesNotContain("Delete(", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Reset(", body, StringComparison.Ordinal);
         Assert.Contains("Append(", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void persisted_records_include_required_metadata_and_strict_sequence_order()
+    {
+        var clock = new FixedClock(DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"));
+        var store = new InMemoryEventStore();
+        var service = new DemoStateService(store, clock);
+
+        service.ExecuteCommand(new ExecuteCommandRequest("OpenAccount", null, "Alice", "cmd-open"));
+        service.ExecuteCommand(new ExecuteCommandRequest("DepositMoney", 25m, null, "cmd-deposit"));
+        service.ExecuteCommand(new ExecuteCommandRequest("WithdrawMoney", 10m, null, "cmd-withdraw"));
+
+        var records = store.ReadRecords("bank-account-demo");
+        Assert.NotEmpty(records);
+
+        foreach (var record in records)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(record.AggregateId));
+            Assert.False(string.IsNullOrWhiteSpace(record.StreamId));
+            Assert.False(string.IsNullOrWhiteSpace(record.CorrelationId));
+            Assert.False(string.IsNullOrWhiteSpace(record.CausationId));
+            Assert.True(record.SequenceNumber > 0);
+        }
+
+        foreach (var aggregateGroup in records.GroupBy(r => r.AggregateId))
+        {
+            var ordered = aggregateGroup.OrderBy(r => r.SequenceNumber).ToArray();
+            for (var i = 1; i < ordered.Length; i++)
+            {
+                Assert.True(
+                    ordered[i].SequenceNumber > ordered[i - 1].SequenceNumber,
+                    $"Aggregate {aggregateGroup.Key} has non-increasing sequence at event {ordered[i].EventId}.");
+            }
+        }
     }
 
     private sealed class FixedClock(DateTimeOffset now) : IClock
