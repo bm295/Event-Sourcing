@@ -162,7 +162,6 @@ function renderEvents() {
     row.innerHTML = `
       <td>${eventRecord.sequenceNumber}</td>
       <td>${eventRecord.eventType}</td>
-      <td><span class="status-pill">${eventRecord.status}</span></td>
       <td>${new Date(eventRecord.createdAtUtc).toLocaleString()}</td>
       <td>${eventRecord.eventId}</td>
     `;
@@ -192,12 +191,8 @@ function renderSelectedEvent() {
       <p><strong>Created:</strong> ${new Date(eventRecord.createdAtUtc).toLocaleString()}</p>
     </div>
     <div>
-      <strong>Status History</strong>
-      <div class="status-row">${eventRecord.statusHistory.map((item) => `<span class="status-pill">${item}</span>`).join("")}</div>
-    </div>
-    <div>
       <strong>Payload</strong>
-      <pre>${escapeHtml(eventRecord.payload)}</pre>
+      <pre>${escapeHtml(eventRecord.payloadJson)}</pre>
     </div>
   `;
 }

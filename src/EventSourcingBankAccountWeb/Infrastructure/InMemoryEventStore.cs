@@ -25,7 +25,7 @@ public sealed class InMemoryEventStore : IEventStore
         lock (_lock)
         {
             var stream = GetStream(@event.StreamId);
-            var stored = new StoredEvent(@event, [EventStatus.New, EventStatus.Persisted]);
+            var stored = new StoredEvent(@event);
             stream.Add(stored);
             return stored.ToRecord();
         }
@@ -57,16 +57,14 @@ public sealed class InMemoryEventStore : IEventStore
 
     private sealed class StoredEvent
     {
-        public StoredEvent(BankAccountEvent domainEvent, List<EventStatus> statusHistory)
+        public StoredEvent(BankAccountEvent domainEvent)
         {
             DomainEvent = domainEvent;
-            StatusHistory = statusHistory;
         }
 
         public string EventId => DomainEvent.EventId;
         public int SequenceNumber => DomainEvent.SequenceNumber;
         public BankAccountEvent DomainEvent { get; }
-        public List<EventStatus> StatusHistory { get; }
 
         public EventRecord ToRecord()
         {
@@ -76,8 +74,6 @@ public sealed class InMemoryEventStore : IEventStore
                 DomainEvent.SequenceNumber,
                 DomainEvent.EventType,
                 DomainEvent.CreatedAtUtc,
-                StatusHistory.Last(),
-                StatusHistory.ToList(),
                 JsonSerializer.Serialize(DomainEvent, DomainEvent.GetType(), JsonOptions));
         }
     }
