@@ -25,6 +25,8 @@ public sealed class BankAccount
             metadata.EventId,
             metadata.StreamId,
             metadata.SequenceNumber,
+            metadata.CorrelationId,
+            metadata.CausationId,
             metadata.CreatedAtUtc,
             command.OwnerName);
     }
@@ -42,6 +44,8 @@ public sealed class BankAccount
             metadata.EventId,
             metadata.StreamId,
             metadata.SequenceNumber,
+            metadata.CorrelationId,
+            metadata.CausationId,
             metadata.CreatedAtUtc,
             command.Amount);
     }
@@ -64,6 +68,8 @@ public sealed class BankAccount
             metadata.EventId,
             metadata.StreamId,
             metadata.SequenceNumber,
+            metadata.CorrelationId,
+            metadata.CausationId,
             metadata.CreatedAtUtc,
             command.Amount);
     }
@@ -73,7 +79,7 @@ public sealed class BankAccount
         switch (@event)
         {
             case AccountOpened opened:
-                AccountId = opened.StreamId;
+                AccountId = opened.AggregateId;
                 IsOpen = true;
                 break;
             case MoneyDeposited deposited:

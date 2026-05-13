@@ -35,10 +35,13 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             try
             {
                 var nextSequence = history.Count + 1;
+                var correlationId = Guid.NewGuid().ToString("N");
                 var metadata = new EventMetadata(
                     Guid.NewGuid().ToString("N"),
                     StreamId,
                     nextSequence,
+                    correlationId,
+                    request.CommandType,
                     clock.UtcNow);
 
                 var domainEvent = request.CommandType switch
@@ -67,6 +70,8 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
                     Guid.NewGuid().ToString("N"),
                     StreamId,
                     history.Count + 1,
+                    Guid.NewGuid().ToString("N"),
+                    request.CommandType,
                     clock.UtcNow,
                     request.CommandType,
                     ex.Message);
