@@ -20,11 +20,23 @@ public sealed class InMemoryEventStore : IEventStore
         }
     }
 
-    public EventRecord Append(BankAccountEvent @event)
+    public EventRecord Append(BankAccountEvent @event, int expectedSequence)
     {
         lock (_lock)
         {
             var stream = GetStream(@event.StreamId);
+            var currentSequence = stream.Count == 0 ? 0 : stream[^1].SequenceNumber;
+            if (currentSequence != expectedSequence)
+            {
+                throw new EventStoreConcurrencyException(@event.StreamId, expectedSequence, currentSequence);
+            }
+
+            var expectedNextSequence = currentSequence + 1;
+            if (@event.SequenceNumber != expectedNextSequence)
+            {
+                throw new EventStoreConcurrencyException(@event.StreamId, expectedNextSequence, @event.SequenceNumber);
+            }
+
             var stored = new StoredEvent(@event);
             stream.Add(stored);
             return stored.ToRecord();

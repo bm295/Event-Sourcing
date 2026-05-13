@@ -52,7 +52,7 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
                 account.Apply(domainEvent);
                 flow.Add(new FlowStep("Emit Domain Event", "bank-account", "application-service", $"Aggregate emitted `{domainEvent.EventType}`."));
 
-                var record = eventStore.Append(domainEvent);
+                var record = eventStore.Append(domainEvent, expectedSequence: history.Count);
                 flow.Add(new FlowStep("Persist Event", "application-service", "event-store", $"Event `{record.EventId}` appended as immutable envelope."));
 
                 flow.Add(new FlowStep("Update Projection", "application-service", "account-balance-projection", $"Projection consumed `{record.EventType}` by replaying the append-only stream."));
@@ -64,6 +64,11 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             catch (DomainException ex)
             {
                 flow.Add(new FlowStep("Validation Error", "bank-account", "command-panel", ex.Message));
+                return new ExecuteCommandResponse(false, ex.Message, BuildState(flow), []);
+            }
+            catch (EventStoreConcurrencyException ex)
+            {
+                flow.Add(new FlowStep("Concurrency Conflict", "event-store", "command-panel", ex.Message));
                 return new ExecuteCommandResponse(false, ex.Message, BuildState(flow), []);
             }
         }
