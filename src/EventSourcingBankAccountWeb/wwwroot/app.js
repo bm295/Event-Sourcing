@@ -164,7 +164,9 @@ function renderEvents() {
       <td>${eventRecord.sequenceNumber}</td>
       <td>${eventRecord.eventType}</td>
       <td>${new Date(eventRecord.createdAtUtc).toLocaleString()}</td>
-      <td>${eventRecord.eventId}</td>
+      <td class="mono-cell">${eventRecord.eventId}</td>
+      <td class="mono-cell">${eventRecord.correlationId}</td>
+      <td class="mono-cell">${eventRecord.causationId ?? "—"}</td>
     `;
     row.addEventListener("click", () => {
       state.selectedEventId = eventRecord.eventId;
@@ -190,6 +192,8 @@ function renderSelectedEvent() {
       <p><strong>Stream:</strong> ${eventRecord.streamId}</p>
       <p><strong>Sequence:</strong> ${eventRecord.sequenceNumber}</p>
       <p><strong>Created:</strong> ${new Date(eventRecord.createdAtUtc).toLocaleString()}</p>
+      <p><strong>Correlation Id:</strong> <code>${eventRecord.correlationId}</code></p>
+      <p><strong>Causation Id:</strong> <code>${eventRecord.causationId ?? "—"}</code></p>
     </div>
     <div>
       <strong>Payload</strong>
