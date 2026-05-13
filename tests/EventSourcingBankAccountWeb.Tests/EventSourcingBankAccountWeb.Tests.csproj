@@ -17,5 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/EventSourcingBankAccountWeb/EventSourcingBankAccountWeb.csproj" />
+    <ProjectReference Include="../../src/EcommerceCheckoutFlow/EcommerceCheckoutFlow.csproj" />
   </ItemGroup>
 </Project>

@@ -10,11 +10,16 @@ public sealed class CancelOrderOnPaymentFailedHandler(IEventBus eventBus)
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
+        var metadata = EventMetadata.NewChild(nameof(OrderCancelled), @event);
         var orderCancelled = new OrderCancelled(
-            @event.OrderId,
+            metadata.EventId,
+            metadata.OccurredAt,
+            metadata.CorrelationId,
+            metadata.CausationId,
+            metadata.EventType,
+            metadata.OrderId,
             @event.CustomerId,
-            $"Payment failed: {@event.Reason}",
-            DateTimeOffset.UtcNow);
+            $"Payment failed: {@event.Reason}");
 
         await eventBus.PublishAsync(orderCancelled);
     }

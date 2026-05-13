@@ -15,12 +15,17 @@ public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher 
     {
         var order = Order.Create(orderId, customerId, items);
 
+        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), order.OrderId);
         var orderPlaced = new OrderPlaced(
-            order.OrderId,
+            metadata.EventId,
+            metadata.OccurredAt,
+            metadata.CorrelationId,
+            metadata.CausationId,
+            metadata.EventType,
+            metadata.OrderId,
             order.CustomerId,
             order.Items,
-            order.TotalAmount,
-            DateTimeOffset.UtcNow);
+            order.TotalAmount);
 
         using var transaction = dbContext.Database.BeginTransaction(capPublisher, autoCommit: false);
 
