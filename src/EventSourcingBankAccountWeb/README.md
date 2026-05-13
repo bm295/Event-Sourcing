@@ -14,6 +14,29 @@ This project is a small ASP.NET Core web demo that visualizes event sourcing wit
 - a database-style event table with event status
 - replay/rebuild from the stored event stream
 
+
+## Mandatory Event Envelope Contract
+Every persisted event is stored as an immutable envelope with these required fields:
+- `EventId`: globally unique event identifier.
+- `AggregateId` / `StreamId`: target aggregate stream.
+- `EventType`: domain event name.
+- `SequenceNumber`: strictly increasing position **within a stream**.
+- `CreatedAtUtc`: envelope timestamp in UTC.
+- `CorrelationId`: shared workflow identifier propagated across all events in the same business flow.
+- `CausationId`: direct predecessor identifier (typically the command id or upstream event id) that caused this event.
+- `PayloadJson`: serialized event payload.
+
+Causality propagation rules:
+1. The UI/application-service creates a `CorrelationId` at command entry and keeps it stable for the whole flow.
+2. Each emitted event must copy that `CorrelationId` unchanged.
+3. `CausationId` must point to the immediate cause for the current step (incoming command id or prior event id).
+4. Rejection events (for invalid transitions) still follow the same envelope contract and propagation rules.
+
+## Interpreting Ordering vs Lineage
+- Use `SequenceNumber` to reason about deterministic replay order **inside one aggregate stream**.
+- Use `CorrelationId`/`CausationId` to trace multi-step lineage across commands/events, including branches and rejected transitions.
+- `SequenceNumber` answers *"what happened first in this stream?"* while correlation/causation answers *"why did this event happen?"*.
+
 ## Prerequisites
 - .NET SDK 10.0 preview or newer
 
