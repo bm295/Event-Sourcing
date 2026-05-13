@@ -42,7 +42,8 @@ async function executeCommand(commandType) {
   const body = {
     commandType,
     amount: Number(document.getElementById("amount").value),
-    ownerName: document.getElementById("owner-name").value
+    ownerName: document.getElementById("owner-name").value,
+    commandId: crypto.randomUUID().replaceAll("-", "")
   };
 
   try {

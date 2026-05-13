@@ -25,8 +25,10 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             var flow = new List<FlowStep>();
             var account = new BankAccount();
             var history = eventStore.ReadStream(StreamId);
+            var commandId = ReadOrGenerateCommandId(request);
+            var correlationId = Guid.NewGuid().ToString("N");
 
-            flow.Add(new FlowStep("Command Received", "command-panel", "application-service", $"UI emitted `{request.CommandType}`."));
+            flow.Add(new FlowStep("Command Received", "command-panel", "application-service", $"UI emitted `{request.CommandType}` (CommandId: `{commandId}`, CorrelationId: `{correlationId}`)."));
             flow.Add(new FlowStep("Load Event Stream", "application-service", "event-store", $"Loaded {history.Count} historical event(s)."));
 
             account.LoadFromHistory(history);
@@ -35,13 +37,12 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             try
             {
                 var nextSequence = history.Count + 1;
-                var correlationId = Guid.NewGuid().ToString("N");
                 var metadata = new EventMetadata(
                     Guid.NewGuid().ToString("N"),
                     StreamId,
                     nextSequence,
                     correlationId,
-                    request.CommandType,
+                    commandId,
                     clock.UtcNow);
 
                 var domainEvent = request.CommandType switch
@@ -53,10 +54,10 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
                 };
 
                 account.Apply(domainEvent);
-                flow.Add(new FlowStep("Emit Domain Event", "bank-account", "application-service", $"Aggregate emitted `{domainEvent.EventType}`."));
+                flow.Add(new FlowStep("Emit Domain Event", "bank-account", "application-service", $"Aggregate emitted `{domainEvent.EventType}` with CorrelationId `{domainEvent.CorrelationId}` and CausationId `{domainEvent.CausationId}`."));
 
                 var record = eventStore.Append(domainEvent, expectedSequence: history.Count);
-                flow.Add(new FlowStep("Persist Event", "application-service", "event-store", $"Event `{record.EventId}` appended as immutable envelope."));
+                flow.Add(new FlowStep("Persist Event", "application-service", "event-store", $"Event `{record.EventId}` appended as immutable envelope (CorrelationId: `{record.CorrelationId}`, CausationId: `{record.CausationId}`)."));
 
                 flow.Add(new FlowStep("Update Projection", "application-service", "account-balance-projection", $"Projection consumed `{record.EventType}` by replaying the append-only stream."));
                 flow.Add(new FlowStep("Refresh Read Model", "account-balance-projection", "account-balance-view", "Read model rebuilt from stored events."));
@@ -70,15 +71,15 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
                     Guid.NewGuid().ToString("N"),
                     StreamId,
                     history.Count + 1,
-                    Guid.NewGuid().ToString("N"),
-                    request.CommandType,
+                    correlationId,
+                    commandId,
                     clock.UtcNow,
                     request.CommandType,
                     ex.Message);
 
                 eventStore.Append(rejection, expectedSequence: history.Count);
-                flow.Add(new FlowStep("Validation Error", "bank-account", "application-service", ex.Message));
-                flow.Add(new FlowStep("Persist Rejection Event", "application-service", "event-store", $"Rejected transition for `{request.CommandType}` persisted as `{rejection.EventType}`."));
+                flow.Add(new FlowStep("Validation Error", "bank-account", "application-service", $"{ex.Message} (CommandId/CausationId: `{commandId}`, CorrelationId: `{correlationId}`)."));
+                flow.Add(new FlowStep("Persist Rejection Event", "application-service", "event-store", $"Rejected transition for `{request.CommandType}` persisted as `{rejection.EventType}` (CorrelationId: `{rejection.CorrelationId}`, CausationId: `{rejection.CausationId}`)."));
                 return new ExecuteCommandResponse(false, ex.Message, BuildState(flow), [rejection.EventId]);
             }
             catch (EventStoreConcurrencyException ex)
@@ -107,6 +108,14 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
         }
     }
 
+
+
+    private static string ReadOrGenerateCommandId(ExecuteCommandRequest request)
+    {
+        return string.IsNullOrWhiteSpace(request.CommandId)
+            ? Guid.NewGuid().ToString("N")
+            : request.CommandId.Trim();
+    }
     private DemoState BuildState(IReadOnlyList<FlowStep> latestFlow)
     {
         var events = eventStore.ReadStream(StreamId);
