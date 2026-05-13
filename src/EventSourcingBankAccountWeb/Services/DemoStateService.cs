@@ -53,11 +53,11 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
                 flow.Add(new FlowStep("Emit Domain Event", "bank-account", "application-service", $"Aggregate emitted `{domainEvent.EventType}`."));
 
                 var record = eventStore.Append(domainEvent);
-                flow.Add(new FlowStep("Persist Event", "application-service", "event-store", $"Event `{record.EventId}` stored with status `{record.Status}`."));
+                flow.Add(new FlowStep("Persist Event", "application-service", "event-store", $"Event `{record.EventId}` appended as immutable envelope."));
 
                 flow.Add(new FlowStep("Update Projection", "application-service", "account-balance-projection", $"Projection consumed `{record.EventType}` by replaying the append-only stream."));
                 flow.Add(new FlowStep("Refresh Read Model", "account-balance-projection", "account-balance-view", "Read model rebuilt from stored events."));
-                flow.Add(new FlowStep("Refresh Event Table", "event-store", "event-list-view", "Event list updated to reflect the latest status."));
+                flow.Add(new FlowStep("Refresh Event Table", "event-store", "event-list-view", "Event list refreshed from append-only records."));
 
                 return new ExecuteCommandResponse(true, null, BuildState(flow), [record.EventId]);
             }
@@ -132,7 +132,7 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             new("event-store", "EventStore", "Append-only store for the ordered event stream.", ["Historical event stream", "Event records"], ["New domain events"]),
             new("account-balance-projection", "AccountBalanceProjection", "Projection that converts domain events into read-model state.", ["AccountBalanceViewModel"], ["Domain events"]),
             new("account-balance-view", "AccountBalanceView", "Read model that shows balance and transaction history.", ["Visual balance updates"], ["Projection output"]),
-            new("event-list-view", "EventListView", "Database-style grid of stored events and their statuses.", ["Event rows", "Selected event details"], ["Persisted event records"]),
+            new("event-list-view", "EventListView", "Database-style grid of immutable stored event envelopes.", ["Event rows", "Selected event details"], ["Persisted event records"]),
             new("flow-inspector", "Flow Inspector", "Panel that explains what the selected component emits and consumes.", ["Component detail display"], ["Selected component metadata"])
         ];
     }

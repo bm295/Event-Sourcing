@@ -45,17 +45,7 @@ public sealed record EventRecord(
     int SequenceNumber,
     string EventType,
     DateTimeOffset CreatedAtUtc,
-    EventStatus Status,
-    IReadOnlyList<EventStatus> StatusHistory,
-    string Payload);
-
-public enum EventStatus
-{
-    New,
-    Persisted,
-    Projected,
-    Replayed
-}
+    string PayloadJson);
 
 public sealed record FlowStep(
     string Title,
