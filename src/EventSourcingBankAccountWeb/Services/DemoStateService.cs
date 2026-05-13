@@ -55,8 +55,7 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
                 var record = eventStore.Append(domainEvent);
                 flow.Add(new FlowStep("Persist Event", "application-service", "event-store", $"Event `{record.EventId}` stored with status `{record.Status}`."));
 
-                eventStore.UpdateStatus(record.EventId, EventStatus.Projected);
-                flow.Add(new FlowStep("Update Projection", "application-service", "account-balance-projection", $"Projection consumed `{record.EventType}`."));
+                flow.Add(new FlowStep("Update Projection", "application-service", "account-balance-projection", $"Projection consumed `{record.EventType}` by replaying the append-only stream."));
                 flow.Add(new FlowStep("Refresh Read Model", "account-balance-projection", "account-balance-view", "Read model rebuilt from stored events."));
                 flow.Add(new FlowStep("Refresh Event Table", "event-store", "event-list-view", "Event list updated to reflect the latest status."));
 
@@ -75,11 +74,6 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
         lock (_lock)
         {
             var events = eventStore.Load(StreamId);
-            foreach (var record in eventStore.GetRecords(StreamId))
-            {
-                eventStore.UpdateStatus(record.EventId, EventStatus.Replayed);
-            }
-
             var flow = new List<FlowStep>
             {
                 new("Replay Requested", "command-panel", "application-service", "UI requested replay from stored events."),
@@ -90,14 +84,6 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             };
 
             return BuildState(flow);
-        }
-    }
-
-    public void Reset()
-    {
-        lock (_lock)
-        {
-            eventStore.Reset(StreamId);
         }
     }
 

@@ -42,35 +42,7 @@ public sealed class InMemoryEventStore : IEventStore
         }
     }
 
-    public void UpdateStatus(string eventId, EventStatus status)
-    {
-        lock (_lock)
-        {
-            foreach (var stream in _streams.Values)
-            {
-                var existing = stream.FirstOrDefault(e => e.EventId == eventId);
-                if (existing is null)
-                {
-                    continue;
-                }
 
-                if (!existing.StatusHistory.Contains(status))
-                {
-                    existing.StatusHistory.Add(status);
-                }
-
-                return;
-            }
-        }
-    }
-
-    public void Reset(string streamId)
-    {
-        lock (_lock)
-        {
-            _streams.Remove(streamId);
-        }
-    }
 
     private List<StoredEvent> GetStream(string streamId)
     {
