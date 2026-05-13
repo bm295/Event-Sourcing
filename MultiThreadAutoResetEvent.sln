@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventSourcingBankAccountWeb
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EcommerceCheckoutFlow", "src\EcommerceCheckoutFlow\EcommerceCheckoutFlow.csproj", "{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventSourcingBankAccountWeb.Tests", "tests\EventSourcingBankAccountWeb.Tests\EventSourcingBankAccountWeb.Tests.csproj", "{8E57FD9F-8EA3-41BA-AE45-FF46B50B2EE8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C34AA1E8-378C-4796-9876-ADE2ABEB1D80}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8E57FD9F-8EA3-41BA-AE45-FF46B50B2EE8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E57FD9F-8EA3-41BA-AE45-FF46B50B2EE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E57FD9F-8EA3-41BA-AE45-FF46B50B2EE8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E57FD9F-8EA3-41BA-AE45-FF46B50B2EE8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
