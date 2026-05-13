@@ -41,9 +41,12 @@ public sealed record ComponentDescriptor(
 
 public sealed record EventRecord(
     string EventId,
+    string AggregateId,
     string StreamId,
     int SequenceNumber,
     string EventType,
+    string CorrelationId,
+    string? CausationId,
     DateTimeOffset CreatedAtUtc,
     string PayloadJson);
 

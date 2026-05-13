@@ -82,9 +82,12 @@ public sealed class InMemoryEventStore : IEventStore
         {
             return new EventRecord(
                 DomainEvent.EventId,
+                DomainEvent.AggregateId,
                 DomainEvent.StreamId,
                 DomainEvent.SequenceNumber,
                 DomainEvent.EventType,
+                DomainEvent.CorrelationId,
+                DomainEvent.CausationId,
                 DomainEvent.CreatedAtUtc,
                 JsonSerializer.Serialize(DomainEvent, DomainEvent.GetType(), JsonOptions));
         }
