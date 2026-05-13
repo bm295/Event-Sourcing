@@ -42,6 +42,18 @@ public sealed record MoneyWithdrawn(
     public override string EventType => nameof(MoneyWithdrawn);
 }
 
+public sealed record StateTransitionRejected(
+    string EventId,
+    string StreamId,
+    int SequenceNumber,
+    DateTimeOffset CreatedAtUtc,
+    string CommandType,
+    string Reason)
+    : BankAccountEvent(EventId, StreamId, SequenceNumber, CreatedAtUtc)
+{
+    public override string EventType => nameof(StateTransitionRejected);
+}
+
 public sealed record EventMetadata(
     string EventId,
     string StreamId,

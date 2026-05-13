@@ -9,7 +9,7 @@ public sealed class InMemoryEventStore : IEventStore
     private readonly object _lock = new();
     private readonly Dictionary<string, List<StoredEvent>> _streams = new();
 
-    public IReadOnlyList<BankAccountEvent> Load(string streamId)
+    public IReadOnlyList<BankAccountEvent> ReadStream(string streamId)
     {
         lock (_lock)
         {
@@ -43,7 +43,7 @@ public sealed class InMemoryEventStore : IEventStore
         }
     }
 
-    public IReadOnlyList<EventRecord> GetRecords(string streamId)
+    public IReadOnlyList<EventRecord> ReadRecords(string streamId)
     {
         lock (_lock)
         {
