@@ -20,15 +20,29 @@ public sealed class PaymentOnOrderPlacedHandler(IPaymentPort paymentPort, IEvent
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
-        paymentPort.Authorize(@event);
+        try
+        {
+            paymentPort.Authorize(@event);
 
-        var paymentAuthorized = new PaymentAuthorized(
-            @event.OrderId,
-            @event.CustomerId,
-            @event.TotalAmount,
-            DateTimeOffset.UtcNow);
+            var paymentAuthorized = new PaymentAuthorized(
+                @event.OrderId,
+                @event.CustomerId,
+                @event.TotalAmount,
+                DateTimeOffset.UtcNow);
 
-        await eventBus.PublishAsync(paymentAuthorized);
+            await eventBus.PublishAsync(paymentAuthorized);
+        }
+        catch (Exception ex)
+        {
+            var paymentFailed = new PaymentFailed(
+                @event.OrderId,
+                @event.CustomerId,
+                @event.TotalAmount,
+                ex.Message,
+                DateTimeOffset.UtcNow);
+
+            await eventBus.PublishAsync(paymentFailed);
+        }
     }
 }
 

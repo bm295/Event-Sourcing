@@ -15,6 +15,19 @@ public sealed record PaymentAuthorized(
     decimal Amount,
     DateTimeOffset OccurredAt) : IDomainEvent;
 
+public sealed record PaymentFailed(
+    string OrderId,
+    string CustomerId,
+    decimal Amount,
+    string Reason,
+    DateTimeOffset OccurredAt) : IDomainEvent;
+
+public sealed record OrderCancelled(
+    string OrderId,
+    string CustomerId,
+    string Reason,
+    DateTimeOffset OccurredAt) : IDomainEvent;
+
 public sealed record ShipmentPrepared(
     string OrderId,
     string CustomerId,

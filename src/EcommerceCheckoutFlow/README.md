@@ -5,7 +5,7 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 ## Structure
 
 - `Domain/`
-  - Core business model and domain events (`Order`, `CartItem`, `OrderPlaced`, `PaymentAuthorized`, `ShipmentPrepared`).
+  - Core business model and domain events (`Order`, `CartItem`, `OrderPlaced`, `PaymentAuthorized`, `PaymentFailed`, `OrderCancelled`, `ShipmentPrepared`).
 - `Application/`
   - `UseCases/CheckoutUseCase` as the main application input.
   - `Ports/` for outbound dependencies (`IInventoryPort`, `IPaymentPort`, `IShippingPort`, `INotificationPort`, `IAnalyticsPort`, `IEventBus`).
@@ -35,10 +35,11 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 2. Use case stores order data and publishes `OrderPlaced` in one CAP transaction.
 3. CAP subscribers (`[CapSubscribe]`) react independently:
    - inventory reservation,
-   - payment authorization (then publishes `PaymentAuthorized`),
+   - payment authorization (publishes `PaymentAuthorized` on success or `PaymentFailed` on error),
    - analytics tracking.
-4. Shipping handler reacts to `PaymentAuthorized`, prepares shipment, then publishes `ShipmentPrepared`.
-5. Notification handlers react to payment and shipment events.
+4. On `PaymentFailed`, the workflow emits `OrderCancelled` as a follow-up business event (without mutating prior events).
+5. Shipping handler reacts to `PaymentAuthorized`, prepares shipment, then publishes `ShipmentPrepared`.
+6. Notification handlers react to payment, cancellation, and shipment events.
 
 ## Why this is hexagonal
 

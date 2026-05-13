@@ -17,6 +17,8 @@ public sealed class CapEventBus(ICapPublisher capPublisher) : IEventBus
     private static string ResolveTopic<TEvent>() where TEvent : IDomainEvent =>
         typeof(TEvent) == typeof(OrderPlaced) ? EventTopics.OrderPlaced :
         typeof(TEvent) == typeof(PaymentAuthorized) ? EventTopics.PaymentAuthorized :
+        typeof(TEvent) == typeof(PaymentFailed) ? EventTopics.PaymentFailed :
+        typeof(TEvent) == typeof(OrderCancelled) ? EventTopics.OrderCancelled :
         typeof(TEvent) == typeof(ShipmentPrepared) ? EventTopics.ShipmentPrepared :
         throw new NotSupportedException($"Unsupported event type: {typeof(TEvent).Name}");
 }
