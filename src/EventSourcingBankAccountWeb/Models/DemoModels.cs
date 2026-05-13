@@ -3,7 +3,8 @@ namespace EventSourcingBankAccountWeb.Models;
 public sealed record ExecuteCommandRequest(
     string CommandType,
     decimal? Amount,
-    string? OwnerName);
+    string? OwnerName,
+    string? CommandId);
 
 public sealed record ExecuteCommandResponse(
     bool Success,
