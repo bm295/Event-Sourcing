@@ -23,10 +23,5 @@ app.MapPost("/api/demo/commands", (ExecuteCommandRequest request, DemoStateServi
 
 app.MapPost("/api/demo/replay", (DemoStateService demo) => Results.Ok(demo.Replay()));
 
-app.MapPost("/api/demo/reset", (DemoStateService demo) =>
-{
-    demo.Reset();
-    return Results.Ok(demo.GetState());
-});
 
 app.Run();
