@@ -28,12 +28,20 @@ public sealed class InMemoryEventStore : IEventStore
             var currentSequence = stream.Count == 0 ? 0 : stream[^1].SequenceNumber;
             if (currentSequence != expectedSequence)
             {
+                // Optimistic concurrency: reject writes from callers that loaded an older stream version.
                 throw new EventStoreConcurrencyException(@event.StreamId, expectedSequence, currentSequence);
             }
 
             var expectedNextSequence = currentSequence + 1;
+            if (@event.SequenceNumber <= currentSequence)
+            {
+                // Explicit stale-event guard: never allow replays/retries to append already-used or older sequence numbers.
+                throw new EventStoreConcurrencyException(@event.StreamId, expectedNextSequence, @event.SequenceNumber);
+            }
+
             if (@event.SequenceNumber != expectedNextSequence)
             {
+                // Gap guard: sequence must be contiguous so replay is deterministic.
                 throw new EventStoreConcurrencyException(@event.StreamId, expectedNextSequence, @event.SequenceNumber);
             }
 

@@ -5,10 +5,10 @@ public sealed class AccountBalanceProjection
     public AccountBalanceViewModel Build(IEnumerable<BankAccountEvent> events)
     {
         var account = new BankAccount();
-        var orderedEvents = events.OrderBy(e => e.SequenceNumber).ToList();
-        account.LoadFromHistory(orderedEvents);
+        var replayEvents = events.ToList();
+        account.LoadFromHistory(replayEvents);
 
-        var history = orderedEvents
+        var history = replayEvents
             .Select(e => new TransactionHistoryItem(e.SequenceNumber, e.EventType, Describe(e), e.CreatedAtUtc))
             .ToList();
 

@@ -8,8 +8,26 @@ public sealed class BankAccount
 
     public void LoadFromHistory(IEnumerable<BankAccountEvent> events)
     {
-        foreach (var @event in events.OrderBy(e => e.SequenceNumber))
+        var expectedAggregateId = string.Empty;
+        int? previousSequence = null;
+
+        foreach (var @event in events)
         {
+            if (string.IsNullOrWhiteSpace(expectedAggregateId))
+            {
+                expectedAggregateId = @event.AggregateId;
+            }
+            else if (!string.Equals(expectedAggregateId, @event.AggregateId, StringComparison.Ordinal))
+            {
+                throw new DomainException($"Replay stream contains mixed aggregates: expected '{expectedAggregateId}', but found '{@event.AggregateId}' at sequence {@event.SequenceNumber}.");
+            }
+
+            if (previousSequence.HasValue && @event.SequenceNumber <= previousSequence.Value)
+            {
+                throw new ReplaySequenceException(@event.AggregateId, previousSequence.Value, @event.SequenceNumber);
+            }
+
+            previousSequence = @event.SequenceNumber;
             Apply(@event);
         }
     }
