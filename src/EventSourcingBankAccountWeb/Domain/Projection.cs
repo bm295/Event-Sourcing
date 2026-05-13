@@ -22,6 +22,7 @@ public sealed class AccountBalanceProjection
             AccountOpened opened => $"Owner: {opened.OwnerName}",
             MoneyDeposited deposited => $"Amount: {deposited.Amount:0.00}",
             MoneyWithdrawn withdrawn => $"Amount: {withdrawn.Amount:0.00}",
+            StateTransitionRejected rejected => $"{rejected.CommandType}: {rejected.Reason}",
             _ => @event.EventType
         };
     }

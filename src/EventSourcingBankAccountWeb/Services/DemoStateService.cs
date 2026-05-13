@@ -24,7 +24,7 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
         {
             var flow = new List<FlowStep>();
             var account = new BankAccount();
-            var history = eventStore.Load(StreamId);
+            var history = eventStore.ReadStream(StreamId);
 
             flow.Add(new FlowStep("Command Received", "command-panel", "application-service", $"UI emitted `{request.CommandType}`."));
             flow.Add(new FlowStep("Load Event Stream", "application-service", "event-store", $"Loaded {history.Count} historical event(s)."));
@@ -63,8 +63,18 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
             }
             catch (DomainException ex)
             {
-                flow.Add(new FlowStep("Validation Error", "bank-account", "command-panel", ex.Message));
-                return new ExecuteCommandResponse(false, ex.Message, BuildState(flow), []);
+                var rejection = new StateTransitionRejected(
+                    Guid.NewGuid().ToString("N"),
+                    StreamId,
+                    history.Count + 1,
+                    clock.UtcNow,
+                    request.CommandType,
+                    ex.Message);
+
+                eventStore.Append(rejection, expectedSequence: history.Count);
+                flow.Add(new FlowStep("Validation Error", "bank-account", "application-service", ex.Message));
+                flow.Add(new FlowStep("Persist Rejection Event", "application-service", "event-store", $"Rejected transition for `{request.CommandType}` persisted as `{rejection.EventType}`."));
+                return new ExecuteCommandResponse(false, ex.Message, BuildState(flow), [rejection.EventId]);
             }
             catch (EventStoreConcurrencyException ex)
             {
@@ -78,7 +88,7 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
     {
         lock (_lock)
         {
-            var events = eventStore.Load(StreamId);
+            var events = eventStore.ReadStream(StreamId);
             var flow = new List<FlowStep>
             {
                 new("Replay Requested", "command-panel", "application-service", "UI requested replay from stored events."),
@@ -94,8 +104,8 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
 
     private DemoState BuildState(IReadOnlyList<FlowStep> latestFlow)
     {
-        var events = eventStore.Load(StreamId);
-        var records = eventStore.GetRecords(StreamId);
+        var events = eventStore.ReadStream(StreamId);
+        var records = eventStore.ReadRecords(StreamId);
         var projection = _projection.Build(events);
 
         var activeComponentIds = latestFlow
@@ -131,9 +141,9 @@ public sealed class DemoStateService(IEventStore eventStore, IClock clock)
     {
         return
         [
-            new("command-panel", "Command Panel", "User-facing controls that emit commands into the system.", ["OpenAccount", "DepositMoney", "WithdrawMoney", "Replay"], ["User input"]),
+            new("command-panel", "Command Panel", "User-facing controls that emit commands into the system.", ["OpenAccount", "DepositMoney", "WithdrawMoney", "Replay", "RejectedTransition"], ["User input"]),
             new("application-service", "BankAccountApplicationService", "Coordinates loading history, dispatching commands, persisting events, and refreshing projections.", ["Persist requests", "Projection update calls", "Flow steps"], ["Commands", "Historical events", "New domain events"]),
-            new("bank-account", "BankAccount", "Aggregate that enforces rules and emits domain events.", ["AccountOpened", "MoneyDeposited", "MoneyWithdrawn"], ["Commands", "Historical events"]),
+            new("bank-account", "BankAccount", "Aggregate that enforces rules and emits domain events.", ["AccountOpened", "MoneyDeposited", "MoneyWithdrawn", "StateTransitionRejected"], ["Commands", "Historical events"]),
             new("event-store", "EventStore", "Append-only store for the ordered event stream.", ["Historical event stream", "Event records"], ["New domain events"]),
             new("account-balance-projection", "AccountBalanceProjection", "Projection that converts domain events into read-model state.", ["AccountBalanceViewModel"], ["Domain events"]),
             new("account-balance-view", "AccountBalanceView", "Read model that shows balance and transaction history.", ["Visual balance updates"], ["Projection output"]),

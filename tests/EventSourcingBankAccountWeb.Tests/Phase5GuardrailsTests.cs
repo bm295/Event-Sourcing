@@ -131,7 +131,7 @@ public sealed class Phase5GuardrailsTests
 
         var successCount = new[] { t1.Result, t2.Result }.Count(x => x);
         Assert.Equal(1, successCount);
-        Assert.Equal(2, store.GetRecords("acc-1").Count);
+        Assert.Equal(2, store.ReadRecords("acc-1").Count);
     }
 
     [Fact]
