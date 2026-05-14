@@ -57,6 +57,58 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 - Adapters keep an in-memory processed-key log and skip duplicate keys.
 - For follow-up publishes, handlers derive a stable dedup key from the source event to prevent duplicate event chains.
 
+## Consumer Safety Checklist
+
+Use this checklist for every CAP consumer that executes side effects.
+
+- [ ] Call `TryMarkProcessedAsync` **before** any side effect.
+- [ ] Use a stable side-effect idempotency key (recommended: `${ConsumerName}:${EventId}`).
+- [ ] If the handler publishes follow-up events, use a deterministic dedupe key for that publish path (for example `DeterministicGuid.FromSource(eventId, nameof(FollowUpEvent))`).
+- [ ] Ensure replay/rebuild path does **not** run through subscriber runtime (`[CapSubscribe]` handlers are runtime-only).
+
+### Consumer chuẩn (copy/paste pattern)
+
+Example below is adapted from `ShippingOnPaymentAuthorizedHandler`:
+
+```csharp
+[CapSubscribe(EventTopics.PaymentAuthorized)]
+public async Task HandleAsync(PaymentAuthorized @event)
+{
+    const string consumerName = nameof(ShippingOnPaymentAuthorizedHandler);
+    var eventId = @event.EventId;
+
+    // 1) Guard duplicate delivery trước side effect.
+    if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+    {
+        return;
+    }
+
+    // 2) Side effect với idempotency key ổn định.
+    shippingPort.Prepare(@event, $"{consumerName}:{eventId}");
+
+    // 3) Follow-up publish với deterministic dedupe key.
+    if (!await deduplicationStore.TryMarkProcessedAsync(
+            consumerName,
+            DeterministicGuid.FromSource(eventId, nameof(ShipmentPrepared))))
+    {
+        return;
+    }
+
+    var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), @event);
+    var shipmentPrepared = new ShipmentPrepared(
+        metadata.EventId,
+        metadata.OccurredAt,
+        metadata.CorrelationId,
+        metadata.CausationId,
+        metadata.EventType,
+        metadata.OrderId,
+        @event.CustomerId,
+        packageCount: 1);
+
+    await eventBus.PublishAsync(shipmentPrepared);
+}
+```
+
 ## Runtime handlers vs projection/rebuild boundary
 
 - `Application/Handlers/` are **runtime consumers only**. They orchestrate outbound side effects via ports (payment, inventory, shipping, notification, analytics) and may publish follow-up events through CAP.
