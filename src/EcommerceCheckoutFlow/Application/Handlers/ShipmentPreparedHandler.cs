@@ -9,22 +9,16 @@ namespace EcommerceCheckoutFlow.Application.Handlers;
 public sealed class NotifyOnShipmentPreparedHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore,
+    IConsumerSequenceGuardStore sequenceGuardStore,
     ILogger<NotifyOnShipmentPreparedHandler> logger)
 {
-    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.ShipmentPrepared)]
     public async Task HandleAsync(ShipmentPrepared @event)
     {
-        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(NotifyOnShipmentPreparedHandler);
-        var eventId = @event.EventId;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
-        {
-            return;
-        }
-
-        notificationPort.Send(
-            $"Shipment prepared for order {@event.OrderId}.",
-            $"{consumerName}:{eventId}");
+        var (_, _, decision) = await ConsumerEventGuard.ValidateAndLogAsync(logger, sequenceGuardStore, consumerName, @event);
+        if (decision != SequenceGuardDecision.Accept) return;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, @event.EventId)) return;
+        notificationPort.Send($"Shipment prepared for order {@event.OrderId}.", $"{consumerName}:{@event.EventId}");
     }
 }

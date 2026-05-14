@@ -8,6 +8,8 @@ public sealed class EcommerceDbContext(DbContextOptions<EcommerceDbContext> opti
 {
     public DbSet<OrderRecord> Orders => Set<OrderRecord>();
     public DbSet<ProcessedMessageRecord> ProcessedMessages => Set<ProcessedMessageRecord>();
+    public DbSet<OrderEventSequenceRecord> OrderEventSequences => Set<OrderEventSequenceRecord>();
+    public DbSet<ConsumerOrderSequenceRecord> ConsumerOrderSequences => Set<ConsumerOrderSequenceRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +22,26 @@ public sealed class EcommerceDbContext(DbContextOptions<EcommerceDbContext> opti
             entity.Property(order => order.ItemsJson).HasColumnName("items_json");
             entity.Property(order => order.TotalAmount).HasColumnName("total_amount");
             entity.Property(order => order.CreatedAtUtc).HasColumnName("created_at_utc");
+        });
+
+
+        modelBuilder.Entity<OrderEventSequenceRecord>(entity =>
+        {
+            entity.ToTable("order_event_sequences");
+            entity.HasKey(x => x.OrderId);
+            entity.Property(x => x.OrderId).HasColumnName("order_id");
+            entity.Property(x => x.LastSequenceNumber).HasColumnName("last_sequence_number");
+        });
+
+        modelBuilder.Entity<ConsumerOrderSequenceRecord>(entity =>
+        {
+            entity.ToTable("consumer_order_sequences");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.ConsumerName).HasColumnName("consumer_name");
+            entity.Property(x => x.OrderId).HasColumnName("order_id");
+            entity.Property(x => x.LastSequenceNumber).HasColumnName("last_sequence_number");
+            entity.HasIndex(x => new { x.ConsumerName, x.OrderId }).IsUnique();
         });
 
         modelBuilder.Entity<ProcessedMessageRecord>(entity =>

@@ -9,77 +9,20 @@ namespace EcommerceCheckoutFlow.Application.Handlers;
 public sealed class CancelOrderOnPaymentFailedHandler(
     IEventBus eventBus,
     IMessageDeduplicationStore deduplicationStore,
+    IConsumerSequenceGuardStore sequenceGuardStore,
+    IOrderEventSequenceAllocator sequenceAllocator,
     ILogger<CancelOrderOnPaymentFailedHandler> logger)
 {
-    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
-        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(CancelOrderOnPaymentFailedHandler);
-        var eventId = @event.EventId;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
-        {
-            return;
-        }
-
-        var metadata = EventMetadata.NewChild(nameof(OrderCancelled), @event);
-        var orderCancelled = new OrderCancelled(
-            metadata.EventId,
-            metadata.OccurredAt,
-            metadata.CorrelationId,
-            metadata.CausationId,
-            metadata.EventType,
-            metadata.OrderId,
-            @event.CustomerId,
-            $"Payment failed: {@event.Reason}");
-
-        await eventBus.PublishAsync(orderCancelled, @event.GetPartitionKey());
-    }
-}
-
-public sealed class NotifyOnPaymentFailedHandler(
-    INotificationPort notificationPort,
-    IMessageDeduplicationStore deduplicationStore,
-    ILogger<NotifyOnPaymentFailedHandler> logger)
-{
-    // CAP subscriber is runtime-only, không dùng cho replay.
-    [CapSubscribe(EventTopics.PaymentFailed)]
-    public async Task HandleAsync(PaymentFailed @event)
-    {
-        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
-        const string consumerName = nameof(NotifyOnPaymentFailedHandler);
-        var eventId = @event.EventId;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
-        {
-            return;
-        }
-
-        notificationPort.Send(
-            $"Payment failed for order {@event.OrderId}: {@event.Reason}",
-            $"{consumerName}:{eventId}");
-    }
-}
-
-public sealed class NotifyOnOrderCancelledHandler(
-    INotificationPort notificationPort,
-    IMessageDeduplicationStore deduplicationStore,
-    ILogger<NotifyOnOrderCancelledHandler> logger)
-{
-    // CAP subscriber is runtime-only, không dùng cho replay.
-    [CapSubscribe(EventTopics.OrderCancelled)]
-    public async Task HandleAsync(OrderCancelled @event)
-    {
-        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
-        const string consumerName = nameof(NotifyOnOrderCancelledHandler);
-        var eventId = @event.EventId;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
-        {
-            return;
-        }
-
-        notificationPort.Send(
-            $"Order {@event.OrderId} cancelled. Reason: {@event.Reason}",
-            $"{consumerName}:{eventId}");
+        var (_, _, decision) = await ConsumerEventGuard.ValidateAndLogAsync(logger, sequenceGuardStore, consumerName, @event);
+        if (decision != SequenceGuardDecision.Accept) return;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, @event.EventId)) return;
+        var seq = await sequenceAllocator.AllocateNextSequenceAsync(@event.OrderId);
+        var metadata = EventMetadata.NewChild(nameof(OrderCancelled), @event, seq);
+        var next = new OrderCancelled(metadata.EventId, metadata.OccurredAt, metadata.CorrelationId, metadata.CausationId, metadata.EventType, metadata.OrderId, metadata.SequenceNumber, @event.CustomerId, $"Payment failed: {@event.Reason}");
+        await eventBus.PublishAsync(next, @event.GetPartitionKey());
     }
 }
