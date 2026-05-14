@@ -3,6 +3,7 @@ using EcommerceCheckoutFlow.Adapters.Primary;
 using EcommerceCheckoutFlow.Adapters.Secondary;
 using EcommerceCheckoutFlow.Adapters.Secondary.Persistence;
 using EcommerceCheckoutFlow.Application.Handlers;
+using EcommerceCheckoutFlow.Application.Projectors;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Application.UseCases;
 using Microsoft.EntityFrameworkCore;
@@ -38,6 +39,8 @@ builder.Services
 
 builder.Services
     .AddSingleton<IEventBus, CapEventBus>()
+    .AddSingleton<CheckoutReadModelProjector>()
+    .AddSingleton<IReplayStateRebuilder, RebuildStateService>()
     .AddSingleton<CheckoutUseCase>()
     .AddSingleton<DemoOrderFactory>()
     .AddSingleton<CheckoutCliAdapter>()

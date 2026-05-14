@@ -2,7 +2,7 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.Projectors;
 
-public sealed class RebuildStateService(CheckoutReadModelProjector projector)
+public sealed class RebuildStateService(CheckoutReadModelProjector projector) : IReplayStateRebuilder
 {
     public CheckoutReadModel Rebuild(IEnumerable<IDomainEvent> eventStream)
     {

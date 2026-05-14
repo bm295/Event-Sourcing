@@ -9,6 +9,7 @@ public sealed class CancelOrderOnPaymentFailedHandler(
     IEventBus eventBus,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
@@ -38,6 +39,7 @@ public sealed class NotifyOnPaymentFailedHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
@@ -58,6 +60,7 @@ public sealed class NotifyOnOrderCancelledHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderCancelled)]
     public async Task HandleAsync(OrderCancelled @event)
     {

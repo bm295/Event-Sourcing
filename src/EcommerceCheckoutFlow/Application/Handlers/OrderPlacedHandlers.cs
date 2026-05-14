@@ -9,6 +9,7 @@ public sealed class InventoryOnOrderPlacedHandler(
     IInventoryPort inventoryPort,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
@@ -28,6 +29,7 @@ public sealed class PaymentOnOrderPlacedHandler(
     IEventBus eventBus,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
@@ -104,6 +106,7 @@ public sealed class AnalyticsOnOrderPlacedHandler(
     IAnalyticsPort analyticsPort,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
