@@ -2,17 +2,20 @@ using DotNetCore.CAP;
 using EcommerceCheckoutFlow.Application;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Domain;
+using Microsoft.Extensions.Logging;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
 public sealed class CancelOrderOnPaymentFailedHandler(
     IEventBus eventBus,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<CancelOrderOnPaymentFailedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
+        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(CancelOrderOnPaymentFailedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
@@ -31,18 +34,20 @@ public sealed class CancelOrderOnPaymentFailedHandler(
             @event.CustomerId,
             $"Payment failed: {@event.Reason}");
 
-        await eventBus.PublishAsync(orderCancelled);
+        await eventBus.PublishAsync(orderCancelled, @event.GetPartitionKey());
     }
 }
 
 public sealed class NotifyOnPaymentFailedHandler(
     INotificationPort notificationPort,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<NotifyOnPaymentFailedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
+        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(NotifyOnPaymentFailedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
@@ -58,12 +63,14 @@ public sealed class NotifyOnPaymentFailedHandler(
 
 public sealed class NotifyOnOrderCancelledHandler(
     INotificationPort notificationPort,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<NotifyOnOrderCancelledHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderCancelled)]
     public async Task HandleAsync(OrderCancelled @event)
     {
+        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(NotifyOnOrderCancelledHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))

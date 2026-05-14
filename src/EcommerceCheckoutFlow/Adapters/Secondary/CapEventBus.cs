@@ -7,11 +7,27 @@ namespace EcommerceCheckoutFlow.Adapters.Secondary;
 
 public sealed class CapEventBus(ICapPublisher capPublisher) : IEventBus
 {
-    public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+    public Task PublishAsync<TEvent>(TEvent @event, string partitionKey, CancellationToken cancellationToken = default)
         where TEvent : IDomainEvent
     {
         var topic = ResolveTopic<TEvent>();
-        return capPublisher.PublishAsync(topic, @event, cancellationToken: cancellationToken);
+        var headers = new Dictionary<string, string?>
+        {
+            ["partitionKey"] = partitionKey
+        };
+
+        return capPublisher.PublishAsync(topic, @event, headers, cancellationToken);
+    }
+
+    public Task PublishAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default)
+        where TEvent : IDomainEvent
+    {
+        if (@event is not IEventEnvelope envelope)
+        {
+            throw new InvalidOperationException($"Event {typeof(TEvent).Name} must implement {nameof(IEventEnvelope)} to derive partition key.");
+        }
+
+        return PublishAsync(@event, envelope.GetPartitionKey(), cancellationToken);
     }
 
     private static string ResolveTopic<TEvent>() where TEvent : IDomainEvent =>
