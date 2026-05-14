@@ -6,7 +6,7 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.UseCases;
 
-public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher capPublisher, IEventBus eventBus)
+public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher capPublisher, IEventBus eventBus, IOrderEventSequenceAllocator sequenceAllocator)
 {
     public async Task PlaceOrderAsync(
         string orderId,
@@ -16,7 +16,8 @@ public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher 
     {
         var order = Order.Create(orderId, customerId, items);
 
-        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), order.OrderId);
+        var nextSequence = await sequenceAllocator.AllocateNextSequenceAsync(order.OrderId, cancellationToken);
+        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), order.OrderId, nextSequence);
         var orderPlaced = new OrderPlaced(
             metadata.EventId,
             metadata.OccurredAt,
@@ -24,6 +25,7 @@ public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher 
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             order.CustomerId,
             order.Items,
             order.TotalAmount);
