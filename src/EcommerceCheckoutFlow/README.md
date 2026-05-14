@@ -56,3 +56,13 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
   - `Operation:OrderId:EventType`
 - Adapters keep an in-memory processed-key log and skip duplicate keys.
 - For follow-up publishes, handlers derive a stable dedup key from the source event to prevent duplicate event chains.
+
+## Runtime handlers vs projection/rebuild boundary
+
+- `Application/Handlers/` are **runtime consumers only**. They orchestrate outbound side effects via ports (payment, inventory, shipping, notification, analytics) and may publish follow-up events through CAP.
+- Replay/rebuild jobs must **not** execute these handlers, otherwise external effects can run again.
+- `Application/Projectors/` contains pure read-model projection components:
+  - `CheckoutReadModelProjector` applies events to `CheckoutReadModel` only.
+  - `RebuildStateService` reads an event stream and replays it through projector logic only.
+- Replay is intentionally run **outside the event bus** in this project (no CAP subscription path), so side-effect subscribers are never triggered during rebuild.
+- If a future implementation reuses the bus for replay, add explicit replay context metadata (for example `IsReplay=true`) and guard all side-effect subscribers.
