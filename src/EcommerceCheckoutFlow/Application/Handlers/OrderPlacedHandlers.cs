@@ -15,11 +15,19 @@ public sealed class InventoryOnOrderPlacedHandler(IInventoryPort inventoryPort)
     }
 }
 
-public sealed class PaymentOnOrderPlacedHandler(IPaymentPort paymentPort, IEventBus eventBus)
+public sealed class PaymentOnOrderPlacedHandler(
+    IPaymentPort paymentPort,
+    IEventBus eventBus,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
+        if (!await deduplicationStore.TryMarkProcessedAsync(nameof(PaymentOnOrderPlacedHandler), @event.EventId))
+        {
+            return;
+        }
+
         try
         {
             paymentPort.Authorize(@event);

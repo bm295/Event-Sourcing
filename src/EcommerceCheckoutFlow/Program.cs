@@ -33,7 +33,8 @@ builder.Services
     .AddSingleton<IPaymentPort>(sp => sp.GetRequiredService<InMemoryPaymentAdapter>())
     .AddSingleton<IShippingPort>(sp => sp.GetRequiredService<InMemoryShippingAdapter>())
     .AddSingleton<IAnalyticsPort>(sp => sp.GetRequiredService<InMemoryAnalyticsAdapter>())
-    .AddSingleton<INotificationPort>(sp => sp.GetRequiredService<ConsoleNotificationAdapter>());
+    .AddSingleton<INotificationPort>(sp => sp.GetRequiredService<ConsoleNotificationAdapter>())
+    .AddScoped<IMessageDeduplicationStore, EfCoreMessageDeduplicationStore>();
 
 builder.Services
     .AddSingleton<IEventBus, CapEventBus>()

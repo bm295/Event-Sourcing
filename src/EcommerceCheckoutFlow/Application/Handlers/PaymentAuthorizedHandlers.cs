@@ -5,11 +5,19 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
-public sealed class ShippingOnPaymentAuthorizedHandler(IShippingPort shippingPort, IEventBus eventBus)
+public sealed class ShippingOnPaymentAuthorizedHandler(
+    IShippingPort shippingPort,
+    IEventBus eventBus,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
+        if (!await deduplicationStore.TryMarkProcessedAsync(nameof(ShippingOnPaymentAuthorizedHandler), @event.EventId))
+        {
+            return;
+        }
+
         shippingPort.Prepare(@event);
 
         var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), @event);
@@ -27,12 +35,18 @@ public sealed class ShippingOnPaymentAuthorizedHandler(IShippingPort shippingPor
     }
 }
 
-public sealed class NotifyOnPaymentAuthorizedHandler(INotificationPort notificationPort)
+public sealed class NotifyOnPaymentAuthorizedHandler(
+    INotificationPort notificationPort,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.PaymentAuthorized)]
-    public Task HandleAsync(PaymentAuthorized @event)
+    public async Task HandleAsync(PaymentAuthorized @event)
     {
+        if (!await deduplicationStore.TryMarkProcessedAsync(nameof(NotifyOnPaymentAuthorizedHandler), @event.EventId))
+        {
+            return;
+        }
+
         notificationPort.Send($"Payment authorized for order {@event.OrderId}.");
-        return Task.CompletedTask;
     }
 }
