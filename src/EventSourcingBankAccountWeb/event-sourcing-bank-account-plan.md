@@ -1,7 +1,7 @@
 # Event-Sourced Bank Account Web Demo
 
 ## Summary
-Build a simple web application that demonstrates event sourcing through a single `BankAccount` aggregate. The application should visualize how commands become events, how events move through the system, and which components emit or consume those events. The user should be able to click on a component in the UI and inspect its role in the event flow. The application should also show a database-style list of all created events and their current status. Keep the scope intentionally small: one account, one stream, no database, and no framework-heavy infrastructure unless the existing repo already uses one.
+Build a simple web application that demonstrates event sourcing through a single `BankAccount` aggregate. The application visualizes how commands become immutable events, how events move through the system, and which components emit or consume those events. The user can click on a component in the UI and inspect its role in the event flow. The application also shows a database-style list of all persisted event envelopes and their metadata. Scope remains intentionally small: one account, one stream, in-memory persistence, and lightweight ASP.NET Core infrastructure.
 
 ## Goal
 The primary goal is not banking features. The primary goal is to make event flow visible and understandable:
@@ -11,6 +11,7 @@ The primary goal is not banking features. The primary goal is to make event flow
 - which component consumes the event to rebuild state or projections
 - how the same event stream drives both write-side state and read-side views
 - how a persisted event list can be inspected the way a user would inspect rows in a database table
+- how sequence numbers, correlation IDs, and causation IDs support deterministic replay and workflow tracing
 
 ## User Experience
 - Show a simple page with a visual layout of the main components:
@@ -42,16 +43,17 @@ The primary goal is not banking features. The primary goal is to make event flow
 3. `BankAccountApplicationService` loads prior events from `EventStore`.
 4. `BankAccount` consumes those historical events to rebuild current state.
 5. `BankAccountApplicationService` sends the new command to `BankAccount`.
-6. `BankAccount` validates business rules and emits one new domain event:
+6. `BankAccount` validates business rules. Valid commands emit one successful domain event:
    - `OpenAccount` -> `AccountOpened`
    - `DepositMoney` -> `MoneyDeposited`
    - `WithdrawMoney` -> `MoneyWithdrawn`
-7. `BankAccountApplicationService` appends the emitted event to `EventStore`.
-8. `BankAccountApplicationService` forwards that same event to `AccountBalanceProjection`.
-9. `AccountBalanceProjection` consumes the event and emits updated read-model state.
-10. `AccountBalanceView` consumes the read-model state and updates the displayed balance/history.
-11. `EventListView` displays the newly persisted event as a new row with current status.
-12. The UI highlights the components and connections involved in that flow.
+7. Invalid commands raise a domain rejection; `BankAccountApplicationService` persists `StateTransitionRejected` as a new event instead of mutating prior events.
+8. `BankAccountApplicationService` appends the emitted event or rejection event to `EventStore` with the expected stream sequence.
+9. `BankAccountApplicationService` forwards the append-only stream to `AccountBalanceProjection`.
+10. `AccountBalanceProjection` consumes the stream and emits updated read-model state.
+11. `AccountBalanceView` consumes the read-model state and updates the displayed balance/history.
+12. `EventListView` displays the newly persisted event as a new row with current status.
+13. The UI highlights the components and connections involved in that flow.
 
 ## Replay / Rebuild Flow
 1. The user clicks `Replay Events` or `Rebuild State`.
@@ -71,16 +73,19 @@ The primary goal is not banking features. The primary goal is to make event flow
   - Loads historical events from `EventStore`
   - Rehydrates `BankAccount`
   - Consumes newly emitted domain events from `BankAccount`
-  - Persists those events to `EventStore`
+  - Creates `StateTransitionRejected` when a command violates domain rules
+  - Persists successful and rejected transitions to `EventStore`
   - Forwards events to `AccountBalanceProjection`
   - Emits UI-facing flow steps for visualization
 - `BankAccount`
   - Consumes commands from `BankAccountApplicationService`
   - Consumes historical events during rehydration
   - Emits `AccountOpened`, `MoneyDeposited`, `MoneyWithdrawn`
+  - Rejects invalid transitions through domain exceptions
   - Applies those same events to update in-memory aggregate state
 - `EventStore`
   - Consumes new domain events for append
+  - Enforces append-only behavior, expected sequence, and contiguous stream ordering
   - Emits ordered historical events during load or replay
 - `AccountBalanceProjection`
   - Consumes domain events
@@ -100,8 +105,8 @@ The primary goal is not banking features. The primary goal is to make event flow
 | Component | Emits | Consumes |
 | --- | --- | --- |
 | `Command Panel` | Commands | User input |
-| `BankAccountApplicationService` | Persist calls, projection update calls, flow-step notifications | Commands, historical events, new domain events |
-| `BankAccount` | `AccountOpened`, `MoneyDeposited`, `MoneyWithdrawn` | Commands, historical events |
+| `BankAccountApplicationService` | Persist calls, projection update calls, flow-step notifications, `StateTransitionRejected` | Commands, historical events, new domain events, domain rejections |
+| `BankAccount` | `AccountOpened`, `MoneyDeposited`, `MoneyWithdrawn`, domain rejection signal | Commands, historical events |
 | `EventStore` | Historical event stream | New domain events |
 | `AccountBalanceProjection` | `AccountBalanceViewModel` | Domain events |
 | `AccountBalanceView` | Visual state updates | Projection output |
@@ -112,9 +117,12 @@ The primary goal is not banking features. The primary goal is to make event flow
 - Show all created events in a table that feels like inspecting persisted rows in a database.
 - Each row should include at least:
   - `EventId`
+  - `AggregateId`
   - `StreamId`
   - `SequenceNumber`
   - `EventType`
+  - `CorrelationId`
+  - `CausationId`
   - `Status`
   - `CreatedAt`
   - `Payload`
@@ -156,10 +164,13 @@ The primary goal is not banking features. The primary goal is to make event flow
   - account must be opened before use
   - deposit amount must be positive
   - withdrawal amount must be positive and cannot exceed current balance
-- Keep the same domain events:
+- Persist both successful and rejected transitions as immutable events.
+- Keep the successful domain events:
   - `AccountOpened`
   - `MoneyDeposited`
   - `MoneyWithdrawn`
+- Add the rejected-transition domain event:
+  - `StateTransitionRejected`
 - Add UI state to visualize:
   - active command
   - active event flow
@@ -184,7 +195,7 @@ The primary goal is not banking features. The primary goal is to make event flow
   - flow-step publisher for UI visualization
 - Infrastructure
   - `IEventStore`
-  - simple in-memory event store for the browser-only version, or file-backed store if a local server is included
+  - append/read-only in-memory event store with optimistic concurrency and contiguous sequence checks
 - Projection
   - `AccountBalanceProjection`
   - optional transaction history projection for display
@@ -192,9 +203,12 @@ The primary goal is not banking features. The primary goal is to make event flow
 ## Event Record Shape
 - `EventRecord`
   - `eventId`
+  - `aggregateId`
   - `streamId`
   - `sequenceNumber`
   - `eventType`
+  - `correlationId`
+  - `causationId`
   - `payload`
   - `createdAt`
   - `status`
@@ -203,6 +217,7 @@ The primary goal is not banking features. The primary goal is to make event flow
 ## Public Interfaces / Types
 - `BankAccountCommand`
 - `BankAccountEvent`
+- `StateTransitionRejected`
 - `BankAccount`
 - `BankAccountApplicationService`
 - `IEventStore`
@@ -217,6 +232,8 @@ The primary goal is not banking features. The primary goal is to make event flow
   - description
   - emits
   - consumes
+- `EventStoreConcurrencyException`
+- `ReplaySequenceException`
 
 ## Suggested Runtime Sequence
 1. User clicks a command button.
@@ -225,7 +242,7 @@ The primary goal is not banking features. The primary goal is to make event flow
 4. Service loads event stream from `EventStore`.
 5. Aggregate rehydrates from prior events.
 6. Service dispatches command to aggregate.
-7. Aggregate emits a new domain event.
+7. Aggregate emits a new domain event, or the application service converts a domain rejection into `StateTransitionRejected`.
 8. Service records flow step: event emitted by aggregate.
 9. Service appends event to `EventStore`.
 10. UI updates the event row status to `Persisted`.
@@ -256,8 +273,10 @@ The primary goal is not banking features. The primary goal is to make event flow
 - Withdrawing zero or negative amount shows a validation error
 - Withdrawing more than current balance shows a validation error
 - Depositing or withdrawing before opening the account shows a validation error
+- Invalid transitions append `StateTransitionRejected` with correlation and causation metadata
 - Replaying the stored event stream reconstructs the same balance as the live session
 - Every created event appears in the event table with the expected metadata
+- Event stream append rejects stale expected sequence values and non-contiguous sequence numbers
 - Persisted events show the correct current status in the UI
 - Clicking an event row shows the correct payload and identifiers
 - Clicking each component shows the correct emits/consumes details
@@ -267,7 +286,7 @@ The primary goal is not banking features. The primary goal is to make event flow
 ## Assumptions
 - Target shape: simple educational web app, not production architecture
 - Single account stream is enough for v1
-- Concurrency/versioning can be omitted
+- Concurrency/versioning is intentionally minimal but present through expected stream sequence checks
 - Projection updates are synchronous
 - A minimal frontend stack is acceptable
 - Fancy graph layout is unnecessary; a clear static diagram is enough

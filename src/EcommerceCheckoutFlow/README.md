@@ -1,170 +1,185 @@
 # EcommerceCheckoutFlow (Hexagonal + Event-Driven E-Commerce + CAP)
 
-This project demonstrates how to apply **hexagonal architecture (ports and adapters)** together with an **event-driven workflow** in an e-commerce checkout domain, using **[CAP](https://cap.dotnetcore.xyz/)** as the event bus and local message table implementation.
+This project demonstrates a checkout workflow built with hexagonal architecture, CAP-backed event publishing, and explicit reliability boundaries for event metadata, ordering, idempotency, and replay.
 
-## Structure
+## Current Architecture
 
 - `Domain/`
-  - Core business model and domain events (`Order`, `CartItem`, `OrderPlaced`, `PaymentAuthorized`, `PaymentFailed`, `OrderCancelled`, `ShipmentPrepared`).
+  - Core model: `Order`, `CartItem`.
+  - Domain events: `OrderPlaced`, `PaymentAuthorized`, `PaymentFailed`, `OrderCancelled`, `ShipmentPrepared`.
+  - `IEventEnvelope` is required for published domain events and carries `EventId`, `OccurredAt`, `CorrelationId`, `CausationId`, `EventType`, `OrderId`, and `SequenceNumber`.
+  - `EventMetadata.NewRoot(...)` creates the first event in a workflow. `EventMetadata.NewChild(...)` preserves correlation, points causation at the source event, and assigns the next per-order sequence.
 - `Application/`
-  - `UseCases/CheckoutUseCase` as the main application input.
-  - `Ports/` for outbound dependencies (`IInventoryPort`, `IPaymentPort`, `IShippingPort`, `INotificationPort`, `IAnalyticsPort`, `IEventBus`).
-  - `EventTopics` for CAP topic names.
-  - `Handlers/` for event-driven orchestration logic.
+  - `UseCases/CheckoutUseCase` is the main application input. It creates the order, allocates the next sequence number, stores the order record, and publishes `OrderPlaced` inside the CAP/EF transaction boundary.
+  - `Ports/` contains outbound dependencies for inventory, payment, shipping, notification, analytics, event publishing, message deduplication, and per-order sequence tracking.
+  - `EventTopics` centralizes CAP topic names.
+  - `Handlers/` contains runtime CAP subscribers that orchestrate side effects and follow-up events.
+  - `Projectors/` contains pure replay/read-model code. Rebuilds go through `IReplayStateRebuilder`, `RebuildStateService`, and `CheckoutReadModelProjector`.
 - `Adapters/Primary/`
-  - `CheckoutCliAdapter` as the driving adapter (entry point interaction).
-  - `PublishController` exposes HTTP routes `~/send` and `~/send/delay` for CAP publish examples.
+  - `CheckoutCliAdapter` drives the sample checkout workflow.
+  - `PublishController` exposes CAP sample routes `GET /send` and `GET /send/delay`.
 - `Adapters/Secondary/`
-  - In-memory implementations for inventory, payment, shipping, analytics, notifications.
-  - `CapEventBus` implementation (`IEventBus`) to publish domain events with CAP.
-  - `Persistence/EcommerceDbContext` for order write persistence.
+  - In-memory adapters implement inventory, payment, shipping, analytics, and notification ports.
+  - `CapEventBus` is the only adapter that calls CAP publish APIs for checkout domain events.
+  - `Persistence/EcommerceDbContext` stores order records, processed-message records, order sequence state, and consumer sequence state.
 
-## Reliability configuration (CAP local message table)
+## Runtime Flow
 
-- CAP storage is backed by SQLite (`UseSqlite`) instead of in-memory storage.
-- Checkout writes business data (`orders` table) and publishes `OrderPlaced` within the same CAP transaction boundary (`BeginTransaction(capPublisher, ...)`).
-- Transport is RabbitMQ (`UseRabbitMQ`) and can be configured via env vars:
-  - `CAP_RABBITMQ_HOST` (default `localhost`)
-  - `CAP_RABBITMQ_USER` (default `guest`)
-  - `CAP_RABBITMQ_PASS` (default `guest`)
-- Business DB connection is configurable via `CHECKOUT_DB_CONNECTION` (default `Data Source=ecommerce-checkout.db`).
+1. A primary adapter calls `CheckoutUseCase.PlaceOrderAsync(...)`.
+2. The use case creates an `OrderPlaced` event with the next sequence number from `IOrderEventSequenceAllocator`.
+3. The order row and `OrderPlaced` publish are committed through the same EF/CAP transaction boundary.
+4. `CapEventBus` maps the event type to a CAP topic and writes the `partitionKey` header from `OrderId`.
+5. CAP subscribers validate the event through `ConsumerEventGuard`, which records the last accepted sequence for each `(ConsumerName, OrderId)`.
+6. Accepted consumers call `IMessageDeduplicationStore.TryMarkProcessedAsync(...)` before side effects.
+7. Secondary adapters receive stable idempotency keys such as `PaymentOnOrderPlacedHandler:{EventId}`.
+8. Payment success emits `PaymentAuthorized`; payment failure emits `PaymentFailed`.
+9. Shipping reacts to `PaymentAuthorized` and emits `ShipmentPrepared`.
+10. Cancellation reacts to `PaymentFailed` and emits `OrderCancelled`.
+11. Notification and analytics handlers react independently and never coordinate through concrete infrastructure classes.
 
-## Event flow
+## Reliability Model
 
-1. Primary adapter calls `CheckoutUseCase.PlaceOrderAsync(...)`.
-2. Use case stores order data and publishes `OrderPlaced` in one CAP transaction.
-3. CAP subscribers (`[CapSubscribe]`) react independently:
-   - inventory reservation,
-   - payment authorization (publishes `PaymentAuthorized` on success or `PaymentFailed` on error),
-   - analytics tracking.
-4. On `PaymentFailed`, the workflow emits `OrderCancelled` as a follow-up business event (without mutating prior events).
-5. Shipping handler reacts to `PaymentAuthorized`, prepares shipment, then publishes `ShipmentPrepared`.
-6. Notification handlers react to payment, cancellation, and shipment events.
+### Storage and Transport
 
-## Why this is hexagonal
+- CAP storage uses SQLite through `UseSqlite`.
+- Checkout write persistence uses EF Core SQLite through `EcommerceDbContext`.
+- RabbitMQ is the configured CAP transport.
+- Business DB connection string:
+  - `CHECKOUT_DB_CONNECTION` (default: `Data Source=ecommerce-checkout.db`)
+- RabbitMQ settings:
+  - `CAP_RABBITMQ_HOST` (default: `localhost`)
+  - `CAP_RABBITMQ_USER` (default: `guest`)
+  - `CAP_RABBITMQ_PASS` (default: `guest`)
 
-- Domain and use cases depend on **ports**, not concrete infrastructure.
-- Adapters implement ports and can be replaced (DB, message broker, payment provider, etc.) without changing domain/application rules.
-- Event handlers keep cross-component coordination decoupled and extensible.
+### Persistence Tables
 
-## Idempotency key convention
+- `orders`
+  - Business write model for placed orders.
+- `processed_messages`
+  - Consumer idempotency table keyed by `(consumer_name, event_id)`.
+  - See `Adapters/Secondary/Persistence/Schema/20260514_processed_messages_retention_policy.md` for cleanup policy.
+- `order_event_sequences`
+  - Last allocated sequence number per order aggregate.
+- `consumer_order_sequences`
+  - Last accepted sequence number per consumer and order.
+- CAP tables
+  - Created by CAP/EF storage for local message table behavior.
 
-- Secondary ports for inventory/payment/shipping/notification now receive `idempotencyKey`.
-- Prefer using upstream `EventId` as the stable source identity.
-- Recommended key formats:
-  - `ConsumerName:EventId`
-  - `Operation:OrderId:EventType`
-- Adapters keep an in-memory processed-key log and skip duplicate keys.
-- For follow-up publishes, handlers derive a stable dedup key from the source event to prevent duplicate event chains.
+## Event Envelope and Ordering
 
-## Consumer Safety Checklist
+Every checkout event implements `IEventEnvelope`.
 
-Use this checklist for every CAP consumer that executes side effects.
+- `EventId` identifies the specific event.
+- `CorrelationId` stays stable across the checkout workflow.
+- `CausationId` points to the direct source event for child events.
+- `OrderId` is the aggregate identity and publish partition key.
+- `SequenceNumber` is strictly increasing within one order stream.
 
-- [ ] Call `TryMarkProcessedAsync` **before** any side effect.
-- [ ] Use a stable side-effect idempotency key (recommended: `${ConsumerName}:${EventId}`).
-- [ ] If the handler publishes follow-up events, use a deterministic dedupe key for that publish path (for example `DeterministicGuid.FromSource(eventId, nameof(FollowUpEvent))`).
-- [ ] Ensure replay/rebuild path does **not** run through subscriber runtime (`[CapSubscribe]` handlers are runtime-only).
+Publish rules:
 
-### Consumer chuẩn (copy/paste pattern)
+- Application publish calls go through `IEventBus`, not raw `ICapPublisher`.
+- `CheckoutUseCase` uses `ICapPublisher` only to open the EF/CAP transaction boundary.
+- Domain events are published with `OrderId` partition affinity.
+- `CapEventBus` sets CAP header `partitionKey=<OrderId>`.
+- Follow-up events allocate a new sequence number for the same `OrderId` before publishing.
 
-Example below is adapted from `ShippingOnPaymentAuthorizedHandler`:
+Consumer ordering rules:
+
+- `ConsumerEventGuard` validates each event before side effects.
+- `SequenceGuardDecision.Accept` allows processing.
+- `SequenceGuardDecision.Duplicate` and `SequenceGuardDecision.OutOfOrder` stop processing.
+- Consumers that subscribe to later events in a stream must have a sequence-guard strategy that can handle their first observed event. The current EF guard records contiguous sequence state per `(ConsumerName, OrderId)`.
+
+## Idempotency Rules
+
+Runtime handlers that execute side effects must follow this order:
+
+1. Validate ordering with `ConsumerEventGuard`.
+2. Call `TryMarkProcessedAsync(consumerName, eventId)` before the side effect.
+3. Pass a stable idempotency key to the secondary adapter.
+4. Allocate a new sequence number before publishing any follow-up domain event.
+5. Publish follow-up events through `IEventBus` with `OrderId` partition affinity.
+
+Consumer pattern:
 
 ```csharp
 [CapSubscribe(EventTopics.PaymentAuthorized)]
 public async Task HandleAsync(PaymentAuthorized @event)
 {
     const string consumerName = nameof(ShippingOnPaymentAuthorizedHandler);
-    var eventId = @event.EventId;
 
-    // 1) Guard duplicate delivery trước side effect.
-    if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
-    {
-        return;
-    }
+    var (_, partitionKey, decision) = await ConsumerEventGuard.ValidateAndLogAsync(
+        logger,
+        sequenceGuardStore,
+        consumerName,
+        @event);
 
-    // 2) Side effect với idempotency key ổn định.
-    shippingPort.Prepare(@event, $"{consumerName}:{eventId}");
+    if (decision != SequenceGuardDecision.Accept) return;
+    if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, @event.EventId)) return;
 
-    // 3) Follow-up publish với deterministic dedupe key.
-    if (!await deduplicationStore.TryMarkProcessedAsync(
-            consumerName,
-            DeterministicGuid.FromSource(eventId, nameof(ShipmentPrepared))))
-    {
-        return;
-    }
+    shippingPort.Prepare(@event, $"{consumerName}:{@event.EventId}");
 
-    var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), @event);
-    var shipmentPrepared = new ShipmentPrepared(
+    var seq = await sequenceAllocator.AllocateNextSequenceAsync(@event.OrderId);
+    var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), @event, seq);
+    var next = new ShipmentPrepared(
         metadata.EventId,
         metadata.OccurredAt,
         metadata.CorrelationId,
         metadata.CausationId,
         metadata.EventType,
         metadata.OrderId,
+        metadata.SequenceNumber,
         @event.CustomerId,
         packageCount: 1);
 
-    await eventBus.PublishAsync(shipmentPrepared);
+    await eventBus.PublishAsync(next, partitionKey);
 }
 ```
 
-## Runtime handlers vs projection/rebuild boundary
+## Runtime Handlers vs Replay Boundary
 
-- `Application/Handlers/` are **runtime consumers only**. They orchestrate outbound side effects via ports (payment, inventory, shipping, notification, analytics) and may publish follow-up events through CAP.
-- Replay/rebuild jobs must **not** execute these handlers, otherwise external effects can run again.
-- `Application/Projectors/` contains pure read-model projection components:
-  - `CheckoutReadModelProjector` applies events to `CheckoutReadModel` only.
-  - `RebuildStateService` implements `IReplayStateRebuilder` and reads an event stream to replay through projector logic only.
-- All replay jobs must depend on `IReplayStateRebuilder` and therefore replay via `RebuildStateService` + `CheckoutReadModelProjector`.
+`Application/Handlers/` are runtime consumers only. They may call secondary ports and publish follow-up events. Replay jobs must not execute these handlers.
 
-### Replay boundary checklist (Do / Don’t)
+Replay uses:
 
-- ✅ **Do**
-  - Replay trực tiếp event stream vào projector (`IReplayStateRebuilder` -> `RebuildStateService` -> `CheckoutReadModelProjector`).
-  - Keep replay logic outside CAP subscriber execution path.
-- ❌ **Don’t**
-  - Publish lại historical events vào CAP để rebuild read model.
-  - Reuse runtime side-effect subscribers for replay.
+- `IReplayStateRebuilder`
+- `RebuildStateService`
+- `CheckoutReadModelProjector`
+- `CheckoutReadModel`
 
-If replay-via-bus becomes mandatory in the future, every replayed message must include metadata flag `IsReplay=true`, and all side-effect handlers must skip processing when this flag is enabled.
+Replay rules:
 
-## Ordering Guarantee by Aggregate
+- Replay directly from an event stream into projector code.
+- Do not republish historical events into CAP to rebuild read models.
+- Do not reuse side-effect subscribers for replay.
+- `RebuildStateService` sorts by `OrderId` and `SequenceNumber`, then validates contiguous sequence numbers per order before projection.
 
-This service enforces **per-aggregate ordering** by publishing every domain event with:
+If replay through the broker becomes a hard requirement later, replayed messages must carry explicit replay metadata and every side-effect handler must skip replay messages before touching external systems.
 
-- `PartitionKey = OrderId`
-- CAP message header `partitionKey=<OrderId>` (set in `CapEventBus`)
-- RabbitMQ logical stream convention: `routing-key = order.{OrderId}` for consumer binding policies (single convention for aggregate stream).
+## CAP Publish Samples
 
-Code pattern:
+`PublishController` includes raw CAP sample endpoints for demonstration:
 
-```csharp
-public static string GetPartitionKey(this IEventEnvelope @event) => @event.OrderId;
+- `GET /send`
+  - Calls `capBus.Publish(...)`.
+- `GET /send/delay`
+  - Calls `capBus.PublishDelay(TimeSpan.FromSeconds(100), ...)`.
 
-await eventBus.PublishAsync(@event, @event.GetPartitionKey(), cancellationToken);
-```
+These endpoints are CAP examples. Checkout domain publishing still goes through `IEventBus` and `CapEventBus`.
 
-### Kafka option
+## Hexagonal Boundary Rules
 
-If switching CAP transport to Kafka, configure producer message key from the same logical key:
+- Domain and application code depend on ports and domain types, not concrete adapters.
+- Raw CAP publish calls for checkout domain events are isolated to `CapEventBus`.
+- Business handlers depend only on the ports they need.
+- External side effects are behind secondary adapters.
+- Replay/read-model rebuilds stay outside the runtime subscriber path.
 
-- Option name: `Kafka:UsePartitionKeyAsMessageKey` (application-level convention)
-- Place to configure: app configuration + `CapEventBus` broker adapter mapping.
-- Example:
+## Anti-Patterns
 
-```json
-{
-  "Kafka": {
-    "UsePartitionKeyAsMessageKey": true
-  }
-}
-```
-
-When enabled, `message.key = OrderId`, ensuring all events from one order stay in one partition.
-
-### Anti-patterns (forbidden)
-
-- Random partition key for aggregate domain events.
-- Round-robin publish for aggregate domain events.
-- Publishing without `OrderId`/partition metadata.
+- Publishing checkout domain events directly with `ICapPublisher` instead of `IEventBus`.
+- Publishing aggregate events without `OrderId` partition affinity.
+- Using random or round-robin partition keys for order events.
+- Running side-effect handlers during replay.
+- Calling side-effect adapters before marking the source event as processed.
+- Mutating historical events instead of publishing new domain events.
