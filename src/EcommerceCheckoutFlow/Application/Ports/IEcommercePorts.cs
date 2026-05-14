@@ -4,22 +4,22 @@ namespace EcommerceCheckoutFlow.Application.Ports;
 
 public interface IInventoryPort
 {
-    void ReserveItems(OrderPlaced @event);
+    void ReserveItems(OrderPlaced @event, string idempotencyKey);
 }
 
 public interface IPaymentPort
 {
-    void Authorize(OrderPlaced @event);
+    void Authorize(OrderPlaced @event, string idempotencyKey);
 }
 
 public interface IShippingPort
 {
-    void Prepare(PaymentAuthorized @event);
+    void Prepare(PaymentAuthorized @event, string idempotencyKey);
 }
 
 public interface INotificationPort
 {
-    void Send(string message);
+    void Send(string message, string idempotencyKey);
 }
 
 public interface IAnalyticsPort

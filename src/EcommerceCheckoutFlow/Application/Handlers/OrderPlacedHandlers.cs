@@ -10,7 +10,7 @@ public sealed class InventoryOnOrderPlacedHandler(IInventoryPort inventoryPort)
     [CapSubscribe(EventTopics.OrderPlaced)]
     public Task HandleAsync(OrderPlaced @event)
     {
-        inventoryPort.ReserveItems(@event);
+        inventoryPort.ReserveItems(@event, $"{nameof(InventoryOnOrderPlacedHandler)}:{@event.EventId}");
         return Task.CompletedTask;
     }
 }
@@ -30,7 +30,14 @@ public sealed class PaymentOnOrderPlacedHandler(
 
         try
         {
-            paymentPort.Authorize(@event);
+            paymentPort.Authorize(@event, $"{nameof(IPaymentPort)}:{@event.EventId}");
+
+            if (!await deduplicationStore.TryMarkProcessedAsync(
+                    nameof(PaymentOnOrderPlacedHandler),
+                    DeterministicGuid.FromSource(@event.EventId, nameof(PaymentAuthorized))))
+            {
+                return;
+            }
 
             var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), @event);
             var paymentAuthorized = new PaymentAuthorized(
@@ -47,6 +54,13 @@ public sealed class PaymentOnOrderPlacedHandler(
         }
         catch (Exception ex)
         {
+            if (!await deduplicationStore.TryMarkProcessedAsync(
+                    nameof(PaymentOnOrderPlacedHandler),
+                    DeterministicGuid.FromSource(@event.EventId, nameof(PaymentFailed))))
+            {
+                return;
+            }
+
             var metadata = EventMetadata.NewChild(nameof(PaymentFailed), @event);
             var paymentFailed = new PaymentFailed(
                 metadata.EventId,
@@ -61,6 +75,18 @@ public sealed class PaymentOnOrderPlacedHandler(
 
             await eventBus.PublishAsync(paymentFailed);
         }
+    }
+}
+
+internal static class DeterministicGuid
+{
+    public static Guid FromSource(Guid sourceEventId, string operation)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes($"{sourceEventId:N}:{operation}");
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        var guidBytes = new byte[16];
+        Array.Copy(hash, guidBytes, guidBytes.Length);
+        return new Guid(guidBytes);
     }
 }
 

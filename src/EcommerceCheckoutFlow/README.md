@@ -46,3 +46,13 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 - Domain and use cases depend on **ports**, not concrete infrastructure.
 - Adapters implement ports and can be replaced (DB, message broker, payment provider, etc.) without changing domain/application rules.
 - Event handlers keep cross-component coordination decoupled and extensible.
+
+## Idempotency key convention
+
+- Secondary ports for inventory/payment/shipping/notification now receive `idempotencyKey`.
+- Prefer using upstream `EventId` as the stable source identity.
+- Recommended key formats:
+  - `ConsumerName:EventId`
+  - `Operation:OrderId:EventType`
+- Adapters keep an in-memory processed-key log and skip duplicate keys.
+- For follow-up publishes, handlers derive a stable dedup key from the source event to prevent duplicate event chains.

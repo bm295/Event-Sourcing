@@ -147,7 +147,7 @@ public sealed class EcommerceEventMetadataTests
     {
         public int AuthorizeCalls { get; private set; }
 
-        public void Authorize(OrderPlaced @event)
+        public void Authorize(OrderPlaced @event, string idempotencyKey)
         {
             AuthorizeCalls++;
             if (shouldThrow)
@@ -161,7 +161,7 @@ public sealed class EcommerceEventMetadataTests
     {
         public int PrepareCalls { get; private set; }
 
-        public void Prepare(PaymentAuthorized @event)
+        public void Prepare(PaymentAuthorized @event, string idempotencyKey)
         {
             PrepareCalls++;
         }
@@ -171,7 +171,7 @@ public sealed class EcommerceEventMetadataTests
     {
         public int SendCalls { get; private set; }
 
-        public void Send(string message)
+        public void Send(string message, string idempotencyKey)
         {
             SendCalls++;
         }
