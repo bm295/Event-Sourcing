@@ -63,6 +63,16 @@ This project demonstrates how to apply **hexagonal architecture (ports and adapt
 - Replay/rebuild jobs must **not** execute these handlers, otherwise external effects can run again.
 - `Application/Projectors/` contains pure read-model projection components:
   - `CheckoutReadModelProjector` applies events to `CheckoutReadModel` only.
-  - `RebuildStateService` reads an event stream and replays it through projector logic only.
-- Replay is intentionally run **outside the event bus** in this project (no CAP subscription path), so side-effect subscribers are never triggered during rebuild.
-- If a future implementation reuses the bus for replay, add explicit replay context metadata (for example `IsReplay=true`) and guard all side-effect subscribers.
+  - `RebuildStateService` implements `IReplayStateRebuilder` and reads an event stream to replay through projector logic only.
+- All replay jobs must depend on `IReplayStateRebuilder` and therefore replay via `RebuildStateService` + `CheckoutReadModelProjector`.
+
+### Replay boundary checklist (Do / Don’t)
+
+- ✅ **Do**
+  - Replay trực tiếp event stream vào projector (`IReplayStateRebuilder` -> `RebuildStateService` -> `CheckoutReadModelProjector`).
+  - Keep replay logic outside CAP subscriber execution path.
+- ❌ **Don’t**
+  - Publish lại historical events vào CAP để rebuild read model.
+  - Reuse runtime side-effect subscribers for replay.
+
+If replay-via-bus becomes mandatory in the future, every replayed message must include metadata flag `IsReplay=true`, and all side-effect handlers must skip processing when this flag is enabled.

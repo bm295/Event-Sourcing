@@ -10,6 +10,7 @@ public sealed class ShippingOnPaymentAuthorizedHandler(
     IEventBus eventBus,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
@@ -48,6 +49,7 @@ public sealed class NotifyOnPaymentAuthorizedHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {

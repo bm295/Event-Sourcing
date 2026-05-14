@@ -9,6 +9,7 @@ public sealed class NotifyOnShipmentPreparedHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore)
 {
+    // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.ShipmentPrepared)]
     public async Task HandleAsync(ShipmentPrepared @event)
     {
