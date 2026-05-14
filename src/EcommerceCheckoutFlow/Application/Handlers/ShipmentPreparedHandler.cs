@@ -10,7 +10,9 @@ public sealed class NotifyOnShipmentPreparedHandler(INotificationPort notificati
     [CapSubscribe(EventTopics.ShipmentPrepared)]
     public Task HandleAsync(ShipmentPrepared @event)
     {
-        notificationPort.Send($"Shipment prepared for order {@event.OrderId}.");
+        notificationPort.Send(
+            $"Shipment prepared for order {@event.OrderId}.",
+            $"{nameof(NotifyOnShipmentPreparedHandler)}:{@event.EventId}");
         return Task.CompletedTask;
     }
 }

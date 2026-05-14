@@ -18,7 +18,14 @@ public sealed class ShippingOnPaymentAuthorizedHandler(
             return;
         }
 
-        shippingPort.Prepare(@event);
+        shippingPort.Prepare(@event, $"{nameof(ShippingOnPaymentAuthorizedHandler)}:{@event.EventId}");
+
+        if (!await deduplicationStore.TryMarkProcessedAsync(
+                nameof(ShippingOnPaymentAuthorizedHandler),
+                DeterministicGuid.FromSource(@event.EventId, nameof(ShipmentPrepared))))
+        {
+            return;
+        }
 
         var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), @event);
         var shipmentPrepared = new ShipmentPrepared(
@@ -47,6 +54,8 @@ public sealed class NotifyOnPaymentAuthorizedHandler(
             return;
         }
 
-        notificationPort.Send($"Payment authorized for order {@event.OrderId}.");
+        notificationPort.Send(
+            $"Payment authorized for order {@event.OrderId}.",
+            $"{nameof(NotifyOnPaymentAuthorizedHandler)}:{@event.EventId}");
     }
 }

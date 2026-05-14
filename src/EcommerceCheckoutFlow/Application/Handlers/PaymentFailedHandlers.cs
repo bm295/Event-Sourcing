@@ -30,7 +30,9 @@ public sealed class NotifyOnPaymentFailedHandler(INotificationPort notificationP
     [CapSubscribe(EventTopics.PaymentFailed)]
     public Task HandleAsync(PaymentFailed @event)
     {
-        notificationPort.Send($"Payment failed for order {@event.OrderId}: {@event.Reason}");
+        notificationPort.Send(
+            $"Payment failed for order {@event.OrderId}: {@event.Reason}",
+            $"{nameof(NotifyOnPaymentFailedHandler)}:{@event.EventId}");
         return Task.CompletedTask;
     }
 }
@@ -40,7 +42,9 @@ public sealed class NotifyOnOrderCancelledHandler(INotificationPort notification
     [CapSubscribe(EventTopics.OrderCancelled)]
     public Task HandleAsync(OrderCancelled @event)
     {
-        notificationPort.Send($"Order {@event.OrderId} cancelled. Reason: {@event.Reason}");
+        notificationPort.Send(
+            $"Order {@event.OrderId} cancelled. Reason: {@event.Reason}",
+            $"{nameof(NotifyOnOrderCancelledHandler)}:{@event.EventId}");
         return Task.CompletedTask;
     }
 }
