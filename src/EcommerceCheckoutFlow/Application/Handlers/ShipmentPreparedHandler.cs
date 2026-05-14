@@ -5,14 +5,22 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
-public sealed class NotifyOnShipmentPreparedHandler(INotificationPort notificationPort)
+public sealed class NotifyOnShipmentPreparedHandler(
+    INotificationPort notificationPort,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.ShipmentPrepared)]
-    public Task HandleAsync(ShipmentPrepared @event)
+    public async Task HandleAsync(ShipmentPrepared @event)
     {
+        const string consumerName = nameof(NotifyOnShipmentPreparedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+        {
+            return;
+        }
+
         notificationPort.Send(
             $"Shipment prepared for order {@event.OrderId}.",
-            $"{nameof(NotifyOnShipmentPreparedHandler)}:{@event.EventId}");
-        return Task.CompletedTask;
+            $"{consumerName}:{eventId}");
     }
 }
