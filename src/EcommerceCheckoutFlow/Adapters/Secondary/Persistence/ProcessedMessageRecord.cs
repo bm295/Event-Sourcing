@@ -1,6 +1,7 @@
 using EcommerceCheckoutFlow.Application.Ports;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EcommerceCheckoutFlow.Adapters.Secondary.Persistence;
 
@@ -12,7 +13,9 @@ public sealed class ProcessedMessageRecord
     public DateTimeOffset ProcessedAtUtc { get; init; }
 }
 
-public sealed class EfCoreMessageDeduplicationStore(EcommerceDbContext dbContext) : IMessageDeduplicationStore
+public sealed class EfCoreMessageDeduplicationStore(
+    EcommerceDbContext dbContext,
+    ILogger<EfCoreMessageDeduplicationStore> logger) : IMessageDeduplicationStore
 {
     public async Task<bool> TryMarkProcessedAsync(string consumerName, Guid eventId, CancellationToken cancellationToken = default)
     {
@@ -30,10 +33,33 @@ public sealed class EfCoreMessageDeduplicationStore(EcommerceDbContext dbContext
             await dbContext.SaveChangesAsync(cancellationToken);
             return true;
         }
-        catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
             dbContext.Entry(record).State = EntityState.Detached;
+            logger.LogInformation(
+                "Skipping duplicate processed message for consumer {ConsumerName} and event {EventId}",
+                consumerName,
+                eventId);
             return false;
         }
+        catch (Exception ex)
+        {
+            dbContext.Entry(record).State = EntityState.Detached;
+            logger.LogError(
+                ex,
+                "Failed to mark processed message for consumer {ConsumerName} and event {EventId}",
+                consumerName,
+                eventId);
+            throw;
+        }
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is SqliteException
+        {
+            SqliteErrorCode: 19,
+            SqliteExtendedErrorCode: 2067
+        };
     }
 }

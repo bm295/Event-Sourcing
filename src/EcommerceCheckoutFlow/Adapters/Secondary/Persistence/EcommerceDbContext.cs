@@ -27,10 +27,11 @@ public sealed class EcommerceDbContext(DbContextOptions<EcommerceDbContext> opti
             entity.ToTable("processed_messages");
             entity.HasKey(record => record.Id);
             entity.Property(record => record.Id).HasColumnName("id");
-            entity.Property(record => record.ConsumerName).HasColumnName("consumer_name");
-            entity.Property(record => record.EventId).HasColumnName("event_id");
-            entity.Property(record => record.ProcessedAtUtc).HasColumnName("processed_at_utc");
-            entity.HasIndex(record => new { record.ConsumerName, record.EventId }).IsUnique();
+            entity.Property(record => record.ConsumerName).HasColumnName("consumer_name").HasColumnType("TEXT");
+            entity.Property(record => record.EventId).HasColumnName("event_id").HasColumnType("TEXT");
+            entity.Property(record => record.ProcessedAtUtc).HasColumnName("processed_at_utc").HasColumnType("TEXT");
+            entity.HasIndex(record => new { record.ConsumerName, record.EventId }).IsUnique().HasDatabaseName("ux_processed_messages_consumer_event");
+            entity.HasIndex(record => record.ProcessedAtUtc).HasDatabaseName("ix_processed_messages_processed_at_utc");
         });
     }
 }
