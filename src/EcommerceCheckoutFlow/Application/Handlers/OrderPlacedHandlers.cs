@@ -5,13 +5,21 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
-public sealed class InventoryOnOrderPlacedHandler(IInventoryPort inventoryPort)
+public sealed class InventoryOnOrderPlacedHandler(
+    IInventoryPort inventoryPort,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.OrderPlaced)]
-    public Task HandleAsync(OrderPlaced @event)
+    public async Task HandleAsync(OrderPlaced @event)
     {
-        inventoryPort.ReserveItems(@event, $"{nameof(InventoryOnOrderPlacedHandler)}:{@event.EventId}");
-        return Task.CompletedTask;
+        const string consumerName = nameof(InventoryOnOrderPlacedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+        {
+            return;
+        }
+
+        inventoryPort.ReserveItems(@event, $"{consumerName}:{eventId}");
     }
 }
 
@@ -23,18 +31,20 @@ public sealed class PaymentOnOrderPlacedHandler(
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
-        if (!await deduplicationStore.TryMarkProcessedAsync(nameof(PaymentOnOrderPlacedHandler), @event.EventId))
+        const string consumerName = nameof(PaymentOnOrderPlacedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
         {
             return;
         }
 
         try
         {
-            paymentPort.Authorize(@event, $"{nameof(IPaymentPort)}:{@event.EventId}");
+            paymentPort.Authorize(@event, $"{consumerName}:{eventId}");
 
             if (!await deduplicationStore.TryMarkProcessedAsync(
-                    nameof(PaymentOnOrderPlacedHandler),
-                    DeterministicGuid.FromSource(@event.EventId, nameof(PaymentAuthorized))))
+                    consumerName,
+                    DeterministicGuid.FromSource(eventId, nameof(PaymentAuthorized))))
             {
                 return;
             }
@@ -55,8 +65,8 @@ public sealed class PaymentOnOrderPlacedHandler(
         catch (Exception ex)
         {
             if (!await deduplicationStore.TryMarkProcessedAsync(
-                    nameof(PaymentOnOrderPlacedHandler),
-                    DeterministicGuid.FromSource(@event.EventId, nameof(PaymentFailed))))
+                    consumerName,
+                    DeterministicGuid.FromSource(eventId, nameof(PaymentFailed))))
             {
                 return;
             }
@@ -90,12 +100,20 @@ internal static class DeterministicGuid
     }
 }
 
-public sealed class AnalyticsOnOrderPlacedHandler(IAnalyticsPort analyticsPort)
+public sealed class AnalyticsOnOrderPlacedHandler(
+    IAnalyticsPort analyticsPort,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.OrderPlaced)]
-    public Task HandleAsync(OrderPlaced @event)
+    public async Task HandleAsync(OrderPlaced @event)
     {
+        const string consumerName = nameof(AnalyticsOnOrderPlacedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+        {
+            return;
+        }
+
         analyticsPort.TrackOrder(@event);
-        return Task.CompletedTask;
     }
 }

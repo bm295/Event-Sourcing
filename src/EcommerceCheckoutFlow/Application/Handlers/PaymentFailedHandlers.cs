@@ -5,11 +5,20 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
-public sealed class CancelOrderOnPaymentFailedHandler(IEventBus eventBus)
+public sealed class CancelOrderOnPaymentFailedHandler(
+    IEventBus eventBus,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.PaymentFailed)]
     public async Task HandleAsync(PaymentFailed @event)
     {
+        const string consumerName = nameof(CancelOrderOnPaymentFailedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+        {
+            return;
+        }
+
         var metadata = EventMetadata.NewChild(nameof(OrderCancelled), @event);
         var orderCancelled = new OrderCancelled(
             metadata.EventId,
@@ -25,26 +34,42 @@ public sealed class CancelOrderOnPaymentFailedHandler(IEventBus eventBus)
     }
 }
 
-public sealed class NotifyOnPaymentFailedHandler(INotificationPort notificationPort)
+public sealed class NotifyOnPaymentFailedHandler(
+    INotificationPort notificationPort,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.PaymentFailed)]
-    public Task HandleAsync(PaymentFailed @event)
+    public async Task HandleAsync(PaymentFailed @event)
     {
+        const string consumerName = nameof(NotifyOnPaymentFailedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+        {
+            return;
+        }
+
         notificationPort.Send(
             $"Payment failed for order {@event.OrderId}: {@event.Reason}",
-            $"{nameof(NotifyOnPaymentFailedHandler)}:{@event.EventId}");
-        return Task.CompletedTask;
+            $"{consumerName}:{eventId}");
     }
 }
 
-public sealed class NotifyOnOrderCancelledHandler(INotificationPort notificationPort)
+public sealed class NotifyOnOrderCancelledHandler(
+    INotificationPort notificationPort,
+    IMessageDeduplicationStore deduplicationStore)
 {
     [CapSubscribe(EventTopics.OrderCancelled)]
-    public Task HandleAsync(OrderCancelled @event)
+    public async Task HandleAsync(OrderCancelled @event)
     {
+        const string consumerName = nameof(NotifyOnOrderCancelledHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
+        {
+            return;
+        }
+
         notificationPort.Send(
             $"Order {@event.OrderId} cancelled. Reason: {@event.Reason}",
-            $"{nameof(NotifyOnOrderCancelledHandler)}:{@event.EventId}");
-        return Task.CompletedTask;
+            $"{consumerName}:{eventId}");
     }
 }

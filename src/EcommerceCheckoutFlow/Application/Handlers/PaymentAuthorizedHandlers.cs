@@ -13,16 +13,18 @@ public sealed class ShippingOnPaymentAuthorizedHandler(
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
-        if (!await deduplicationStore.TryMarkProcessedAsync(nameof(ShippingOnPaymentAuthorizedHandler), @event.EventId))
+        const string consumerName = nameof(ShippingOnPaymentAuthorizedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
         {
             return;
         }
 
-        shippingPort.Prepare(@event, $"{nameof(ShippingOnPaymentAuthorizedHandler)}:{@event.EventId}");
+        shippingPort.Prepare(@event, $"{consumerName}:{eventId}");
 
         if (!await deduplicationStore.TryMarkProcessedAsync(
-                nameof(ShippingOnPaymentAuthorizedHandler),
-                DeterministicGuid.FromSource(@event.EventId, nameof(ShipmentPrepared))))
+                consumerName,
+                DeterministicGuid.FromSource(eventId, nameof(ShipmentPrepared))))
         {
             return;
         }
@@ -49,13 +51,15 @@ public sealed class NotifyOnPaymentAuthorizedHandler(
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
-        if (!await deduplicationStore.TryMarkProcessedAsync(nameof(NotifyOnPaymentAuthorizedHandler), @event.EventId))
+        const string consumerName = nameof(NotifyOnPaymentAuthorizedHandler);
+        var eventId = @event.EventId;
+        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
         {
             return;
         }
 
         notificationPort.Send(
             $"Payment authorized for order {@event.OrderId}.",
-            $"{nameof(NotifyOnPaymentAuthorizedHandler)}:{@event.EventId}");
+            $"{consumerName}:{eventId}");
     }
 }
