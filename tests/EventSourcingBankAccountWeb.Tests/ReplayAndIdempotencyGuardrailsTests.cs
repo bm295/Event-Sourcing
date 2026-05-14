@@ -22,7 +22,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
 
         var paymentHandler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedupe);
         var inventoryHandler = new InventoryOnOrderPlacedHandler(new IdempotentInventoryPortWrapper(inventoryPort));
-        var analyticsHandler = new AnalyticsOnOrderPlacedHandler(new IdempotentAnalyticsPortWrapper(analyticsPort));
+        var analyticsHandler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe);
 
         await paymentHandler.HandleAsync(orderPlaced);
         await paymentHandler.HandleAsync(orderPlaced);
@@ -65,7 +65,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
     }
 
     [Fact]
-    public void Given_historical_events_When_rebuild_state_for_replay_Then_state_is_rebuilt_without_invoking_side_effect_ports()
+    public void Given_historical_stream_When_replay_is_executed_Then_only_read_model_changes_and_no_outbound_side_effects_are_called()
     {
         var paymentPort = new SpyPaymentPort();
         var inventoryPort = new SpyInventoryPort();
@@ -137,6 +137,64 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
             .Where(x => x.ConsumerName == "ShippingOnPaymentAuthorizedHandler" && x.EventId == eventId)
             .CountAsync();
         Assert.Equal(1, records);
+    }
+
+    [Fact]
+    public async Task Given_duplicate_ShipmentPrepared_delivery_When_notify_handler_processes_event_Then_notification_side_effect_is_called_only_once()
+    {
+        var notificationPort = new SpyNotificationPort();
+        var dedupe = new InMemoryDeduplicationStore();
+        var orderPlaced = CreateOrderPlaced("order-400", 1, 20m);
+        var paymentAuthorized = CreatePaymentAuthorized(orderPlaced);
+        var shipmentPrepared = CreateShipmentPrepared(paymentAuthorized);
+        var handler = new NotifyOnShipmentPreparedHandler(notificationPort, dedupe);
+
+        await handler.HandleAsync(shipmentPrepared);
+        await handler.HandleAsync(shipmentPrepared);
+
+        Assert.Equal(1, notificationPort.SendCalls);
+    }
+
+    [Fact]
+    public async Task Given_duplicate_OrderPlaced_delivery_When_analytics_handler_processes_event_Then_tracking_side_effect_does_not_increment_twice()
+    {
+        var analyticsPort = new SpyAnalyticsPort();
+        var dedupe = new InMemoryDeduplicationStore();
+        var orderPlaced = CreateOrderPlaced("order-500", 2, 35m);
+        var handler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe);
+
+        await handler.HandleAsync(orderPlaced);
+        await handler.HandleAsync(orderPlaced);
+
+        Assert.Equal(1, analyticsPort.TrackedOrders);
+    }
+
+    [Fact]
+    public async Task Given_concurrent_duplicate_ShipmentPrepared_delivery_When_notify_handler_races_on_same_event_Then_only_one_notification_side_effect_is_executed()
+    {
+        var notificationPort = new SpyNotificationPort();
+        var dedupe = new InMemoryDeduplicationStore();
+        var orderPlaced = CreateOrderPlaced("order-600", 1, 25m);
+        var paymentAuthorized = CreatePaymentAuthorized(orderPlaced);
+        var shipmentPrepared = CreateShipmentPrepared(paymentAuthorized);
+        var handler = new NotifyOnShipmentPreparedHandler(notificationPort, dedupe);
+
+        await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => handler.HandleAsync(shipmentPrepared)));
+
+        Assert.Equal(1, notificationPort.SendCalls);
+    }
+
+    [Fact]
+    public async Task Given_concurrent_duplicate_OrderPlaced_delivery_When_analytics_handler_races_on_same_event_Then_tracking_side_effect_is_executed_once()
+    {
+        var analyticsPort = new SpyAnalyticsPort();
+        var dedupe = new InMemoryDeduplicationStore();
+        var orderPlaced = CreateOrderPlaced("order-700", 1, 10m);
+        var handler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe);
+
+        await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => handler.HandleAsync(orderPlaced)));
+
+        Assert.Equal(1, analyticsPort.TrackedOrders);
     }
 
     private static OrderPlaced CreateOrderPlaced(string orderId, int quantity, decimal totalAmount)
@@ -244,23 +302,10 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         }
     }
 
-    private sealed class SpyAnalyticsPort
+    private sealed class SpyAnalyticsPort : IAnalyticsPort
     {
         public int TrackedOrders { get; private set; }
-        public void Track(OrderPlaced orderPlaced) => TrackedOrders++;
-    }
-
-    private sealed class IdempotentAnalyticsPortWrapper(SpyAnalyticsPort spy) : IAnalyticsPort
-    {
-        private readonly HashSet<Guid> _processed = [];
-
-        public void TrackOrder(OrderPlaced orderPlaced)
-        {
-            if (_processed.Add(orderPlaced.EventId))
-            {
-                spy.Track(orderPlaced);
-            }
-        }
+        public void TrackOrder(OrderPlaced orderPlaced) => TrackedOrders++;
     }
 
     private sealed class SpyShippingPort : IShippingPort
