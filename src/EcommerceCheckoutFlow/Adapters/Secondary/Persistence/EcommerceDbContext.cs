@@ -7,6 +7,7 @@ namespace EcommerceCheckoutFlow.Adapters.Secondary.Persistence;
 public sealed class EcommerceDbContext(DbContextOptions<EcommerceDbContext> options) : DbContext(options)
 {
     public DbSet<OrderRecord> Orders => Set<OrderRecord>();
+    public DbSet<ProcessedMessageRecord> ProcessedMessages => Set<ProcessedMessageRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -19,6 +20,17 @@ public sealed class EcommerceDbContext(DbContextOptions<EcommerceDbContext> opti
             entity.Property(order => order.ItemsJson).HasColumnName("items_json");
             entity.Property(order => order.TotalAmount).HasColumnName("total_amount");
             entity.Property(order => order.CreatedAtUtc).HasColumnName("created_at_utc");
+        });
+
+        modelBuilder.Entity<ProcessedMessageRecord>(entity =>
+        {
+            entity.ToTable("processed_messages");
+            entity.HasKey(record => record.Id);
+            entity.Property(record => record.Id).HasColumnName("id");
+            entity.Property(record => record.ConsumerName).HasColumnName("consumer_name");
+            entity.Property(record => record.EventId).HasColumnName("event_id");
+            entity.Property(record => record.ProcessedAtUtc).HasColumnName("processed_at_utc");
+            entity.HasIndex(record => new { record.ConsumerName, record.EventId }).IsUnique();
         });
     }
 }
