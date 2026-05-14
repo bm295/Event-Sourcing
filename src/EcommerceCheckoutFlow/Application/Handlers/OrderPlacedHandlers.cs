@@ -2,17 +2,20 @@ using DotNetCore.CAP;
 using EcommerceCheckoutFlow.Application;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Domain;
+using Microsoft.Extensions.Logging;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
 public sealed class InventoryOnOrderPlacedHandler(
     IInventoryPort inventoryPort,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<InventoryOnOrderPlacedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
+        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(InventoryOnOrderPlacedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
@@ -27,12 +30,14 @@ public sealed class InventoryOnOrderPlacedHandler(
 public sealed class PaymentOnOrderPlacedHandler(
     IPaymentPort paymentPort,
     IEventBus eventBus,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<PaymentOnOrderPlacedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
+        var (_, partitionKey) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(PaymentOnOrderPlacedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
@@ -62,7 +67,7 @@ public sealed class PaymentOnOrderPlacedHandler(
                 @event.CustomerId,
                 @event.TotalAmount);
 
-            await eventBus.PublishAsync(paymentAuthorized);
+            await eventBus.PublishAsync(paymentAuthorized, partitionKey);
         }
         catch (Exception ex)
         {
@@ -85,7 +90,7 @@ public sealed class PaymentOnOrderPlacedHandler(
                 @event.TotalAmount,
                 ex.Message);
 
-            await eventBus.PublishAsync(paymentFailed);
+            await eventBus.PublishAsync(paymentFailed, partitionKey);
         }
     }
 }
@@ -104,12 +109,14 @@ internal static class DeterministicGuid
 
 public sealed class AnalyticsOnOrderPlacedHandler(
     IAnalyticsPort analyticsPort,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<AnalyticsOnOrderPlacedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.OrderPlaced)]
     public async Task HandleAsync(OrderPlaced @event)
     {
+        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(AnalyticsOnOrderPlacedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))

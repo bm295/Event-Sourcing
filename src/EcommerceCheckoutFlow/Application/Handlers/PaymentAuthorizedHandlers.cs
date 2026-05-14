@@ -2,18 +2,21 @@ using DotNetCore.CAP;
 using EcommerceCheckoutFlow.Application;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Domain;
+using Microsoft.Extensions.Logging;
 
 namespace EcommerceCheckoutFlow.Application.Handlers;
 
 public sealed class ShippingOnPaymentAuthorizedHandler(
     IShippingPort shippingPort,
     IEventBus eventBus,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<ShippingOnPaymentAuthorizedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
+        var (_, partitionKey) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(ShippingOnPaymentAuthorizedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))
@@ -41,18 +44,20 @@ public sealed class ShippingOnPaymentAuthorizedHandler(
             @event.CustomerId,
             packageCount: 1);
 
-        await eventBus.PublishAsync(shipmentPrepared);
+        await eventBus.PublishAsync(shipmentPrepared, partitionKey);
     }
 }
 
 public sealed class NotifyOnPaymentAuthorizedHandler(
     INotificationPort notificationPort,
-    IMessageDeduplicationStore deduplicationStore)
+    IMessageDeduplicationStore deduplicationStore,
+    ILogger<NotifyOnPaymentAuthorizedHandler> logger)
 {
     // CAP subscriber is runtime-only, không dùng cho replay.
     [CapSubscribe(EventTopics.PaymentAuthorized)]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
+        var (_, _) = ConsumerEventGuard.ValidateAndLog(logger, @event);
         const string consumerName = nameof(NotifyOnPaymentAuthorizedHandler);
         var eventId = @event.EventId;
         if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, eventId))

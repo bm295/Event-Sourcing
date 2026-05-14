@@ -12,6 +12,11 @@ public interface IEventEnvelope
     string OrderId { get; }
 }
 
+public static class EventEnvelopeExtensions
+{
+    public static string GetPartitionKey(this IEventEnvelope @event) => @event.OrderId;
+}
+
 public sealed record EventMetadata(
     Guid EventId,
     DateTimeOffset OccurredAt,

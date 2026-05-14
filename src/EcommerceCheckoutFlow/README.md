@@ -128,3 +128,43 @@ public async Task HandleAsync(PaymentAuthorized @event)
   - Reuse runtime side-effect subscribers for replay.
 
 If replay-via-bus becomes mandatory in the future, every replayed message must include metadata flag `IsReplay=true`, and all side-effect handlers must skip processing when this flag is enabled.
+
+## Ordering Guarantee by Aggregate
+
+This service enforces **per-aggregate ordering** by publishing every domain event with:
+
+- `PartitionKey = OrderId`
+- CAP message header `partitionKey=<OrderId>` (set in `CapEventBus`)
+- RabbitMQ logical stream convention: `routing-key = order.{OrderId}` for consumer binding policies (single convention for aggregate stream).
+
+Code pattern:
+
+```csharp
+public static string GetPartitionKey(this IEventEnvelope @event) => @event.OrderId;
+
+await eventBus.PublishAsync(@event, @event.GetPartitionKey(), cancellationToken);
+```
+
+### Kafka option
+
+If switching CAP transport to Kafka, configure producer message key from the same logical key:
+
+- Option name: `Kafka:UsePartitionKeyAsMessageKey` (application-level convention)
+- Place to configure: app configuration + `CapEventBus` broker adapter mapping.
+- Example:
+
+```json
+{
+  "Kafka": {
+    "UsePartitionKeyAsMessageKey": true
+  }
+}
+```
+
+When enabled, `message.key = OrderId`, ensuring all events from one order stay in one partition.
+
+### Anti-patterns (forbidden)
+
+- Random partition key for aggregate domain events.
+- Round-robin publish for aggregate domain events.
+- Publishing without `OrderId`/partition metadata.
