@@ -1,0 +1,25 @@
+name: Guardrails
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: ["main", "master"]
+
+jobs:
+  guardrail-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore MultiThreadAutoResetEvent.sln
+
+      - name: Run mandatory guardrail tests
+        run: dotnet test tests/EventSourcingBankAccountWeb.Tests/EventSourcingBankAccountWeb.Tests.csproj --configuration Release --no-restore --filter "FullyQualifiedName~Guardrail|FullyQualifiedName~Architecture|FullyQualifiedName~Metadata|FullyQualifiedName~Replay|FullyQualifiedName~Idempotency"
