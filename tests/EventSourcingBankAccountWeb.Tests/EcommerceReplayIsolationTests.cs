@@ -1,6 +1,7 @@
 using EcommerceCheckoutFlow.Adapters.Secondary;
 using EcommerceCheckoutFlow.Application.Projectors;
 using EcommerceCheckoutFlow.Domain;
+using Xunit;
 
 namespace EventSourcingBankAccountWeb.Tests;
 
@@ -44,7 +45,7 @@ public sealed class EcommerceReplayIsolationTests
 
     private static OrderPlaced CreateOrderPlaced(string orderId, decimal totalAmount, int quantity)
     {
-        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), orderId);
+        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), orderId, 1);
         return new OrderPlaced(
             metadata.EventId,
             metadata.OccurredAt,
@@ -52,6 +53,7 @@ public sealed class EcommerceReplayIsolationTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             "customer-1",
             [new CartItem("sku-1", "Item 1", quantity, 10m)],
             totalAmount);
@@ -59,7 +61,7 @@ public sealed class EcommerceReplayIsolationTests
 
     private static PaymentAuthorized CreatePaymentAuthorized(OrderPlaced orderPlaced)
     {
-        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), orderPlaced);
+        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), orderPlaced, 2);
         return new PaymentAuthorized(
             metadata.EventId,
             metadata.OccurredAt,
@@ -67,13 +69,14 @@ public sealed class EcommerceReplayIsolationTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             orderPlaced.CustomerId,
             orderPlaced.TotalAmount);
     }
 
     private static ShipmentPrepared CreateShipmentPrepared(PaymentAuthorized paymentAuthorized)
     {
-        var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), paymentAuthorized);
+        var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), paymentAuthorized, 1);
         return new ShipmentPrepared(
             metadata.EventId,
             metadata.OccurredAt,
@@ -81,7 +84,8 @@ public sealed class EcommerceReplayIsolationTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             paymentAuthorized.CustomerId,
-            packageCount: 1);
+            1);
     }
 }

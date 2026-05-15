@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using EcommerceCheckoutFlow.Application.Handlers;
 using EcommerceCheckoutFlow.Application.Ports;
 using EcommerceCheckoutFlow.Domain;
+using Xunit;
 
 namespace EventSourcingBankAccountWeb.Tests;
 
@@ -14,15 +15,17 @@ public sealed class EcommerceEventMetadataTests
         var paymentPort = new StubPaymentPort();
         var shippingPort = new StubShippingPort();
         var dedup = new InMemoryDeduplicationStore();
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
 
         var orderPlaced = CreateOrderPlaced();
 
-        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
+        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
         var paymentAuthorized = Assert.IsType<PaymentAuthorized>(Assert.Single(eventBus.Events));
         Assert.Equal(orderPlaced.OrderId, eventBus.PublishCalls.Single().PartitionKey);
         AssertValidMetadata(paymentAuthorized, nameof(PaymentAuthorized), orderPlaced);
 
-        await new ShippingOnPaymentAuthorizedHandler(shippingPort, eventBus, dedup, NullLogger<ShippingOnPaymentAuthorizedHandler>.Instance).HandleAsync(paymentAuthorized);
+        await new ShippingOnPaymentAuthorizedHandler(shippingPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<ShippingOnPaymentAuthorizedHandler>.Instance).HandleAsync(paymentAuthorized);
         var shipmentPrepared = Assert.IsType<ShipmentPrepared>(eventBus.Events.Last());
         AssertValidMetadata(shipmentPrepared, nameof(ShipmentPrepared), paymentAuthorized);
     }
@@ -33,15 +36,17 @@ public sealed class EcommerceEventMetadataTests
         var eventBus = new CollectingEventBus();
         var paymentPort = new StubPaymentPort(shouldThrow: true);
         var dedup = new InMemoryDeduplicationStore();
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
 
         var orderPlaced = CreateOrderPlaced();
 
-        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
+        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
         var paymentFailed = Assert.IsType<PaymentFailed>(Assert.Single(eventBus.Events));
         Assert.Equal(orderPlaced.OrderId, eventBus.PublishCalls.Single().PartitionKey);
         AssertValidMetadata(paymentFailed, nameof(PaymentFailed), orderPlaced);
 
-        await new CancelOrderOnPaymentFailedHandler(eventBus, dedup, NullLogger<CancelOrderOnPaymentFailedHandler>.Instance).HandleAsync(paymentFailed);
+        await new CancelOrderOnPaymentFailedHandler(eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<CancelOrderOnPaymentFailedHandler>.Instance).HandleAsync(paymentFailed);
         var orderCancelled = Assert.IsType<OrderCancelled>(eventBus.Events.Last());
         AssertValidMetadata(orderCancelled, nameof(OrderCancelled), paymentFailed);
     }
@@ -52,7 +57,9 @@ public sealed class EcommerceEventMetadataTests
         var eventBus = new CollectingEventBus();
         var paymentPort = new StubPaymentPort();
         var dedup = new InMemoryDeduplicationStore();
-        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
+        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
         var orderPlaced = CreateOrderPlaced();
 
         await handler.HandleAsync(orderPlaced);
@@ -68,7 +75,9 @@ public sealed class EcommerceEventMetadataTests
         var eventBus = new CollectingEventBus();
         var shippingPort = new StubShippingPort();
         var dedup = new InMemoryDeduplicationStore();
-        var handler = new ShippingOnPaymentAuthorizedHandler(shippingPort, eventBus, dedup, NullLogger<ShippingOnPaymentAuthorizedHandler>.Instance);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
+        var handler = new ShippingOnPaymentAuthorizedHandler(shippingPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<ShippingOnPaymentAuthorizedHandler>.Instance);
         var paymentAuthorized = CreatePaymentAuthorized();
 
         await handler.HandleAsync(paymentAuthorized);
@@ -83,7 +92,8 @@ public sealed class EcommerceEventMetadataTests
     {
         var notificationPort = new StubNotificationPort();
         var dedup = new InMemoryDeduplicationStore();
-        var handler = new NotifyOnPaymentAuthorizedHandler(notificationPort, dedup, NullLogger<NotifyOnPaymentAuthorizedHandler>.Instance);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var handler = new NotifyOnPaymentAuthorizedHandler(notificationPort, dedup, sequenceGuardStore, NullLogger<NotifyOnPaymentAuthorizedHandler>.Instance);
         var paymentAuthorized = CreatePaymentAuthorized();
 
         await handler.HandleAsync(paymentAuthorized);
@@ -99,7 +109,9 @@ public sealed class EcommerceEventMetadataTests
         var eventBus = new CollectingEventBus();
         var paymentPort = new StubPaymentPort();
         var dedup = new InMemoryDeduplicationStore();
-        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
+        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
 
         var order1 = CreateOrderPlaced();
         var order2 = CreateOrderPlaced() with { OrderId = "order-999" };
@@ -114,7 +126,7 @@ public sealed class EcommerceEventMetadataTests
 
     private static OrderPlaced CreateOrderPlaced()
     {
-        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), "order-123");
+        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), "order-123", 1);
 
         return new OrderPlaced(
             metadata.EventId,
@@ -123,6 +135,7 @@ public sealed class EcommerceEventMetadataTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             "customer-456",
             [new CartItem("sku-1", "Item 1", 1, 9.99m)],
             9.99m);
@@ -131,7 +144,7 @@ public sealed class EcommerceEventMetadataTests
     private static PaymentAuthorized CreatePaymentAuthorized()
     {
         var orderPlaced = CreateOrderPlaced();
-        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), orderPlaced);
+        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), orderPlaced, 2);
 
         return new PaymentAuthorized(
             metadata.EventId,
@@ -140,6 +153,7 @@ public sealed class EcommerceEventMetadataTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             orderPlaced.CustomerId,
             orderPlaced.TotalAmount);
     }
@@ -221,6 +235,22 @@ public sealed class EcommerceEventMetadataTests
         {
             var key = $"{consumerName}:{eventId}";
             return Task.FromResult(_processed.Add(key));
+        }
+    }
+
+    private class InMemoryConsumerSequenceGuardStore : IConsumerSequenceGuardStore
+    {
+        public Task<SequenceGuardDecision> CheckAndRecordAsync(string consumerName, string orderId, long sequenceNumber, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    private class InMemoryOrderEventSequenceAllocator : IOrderEventSequenceAllocator
+    {
+        public Task<long> AllocateNextSequenceAsync(string orderId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
         }
     }
 }

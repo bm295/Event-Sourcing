@@ -5,6 +5,8 @@ using EcommerceCheckoutFlow.Application.Projectors;
 using EcommerceCheckoutFlow.Domain;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
 
 namespace EventSourcingBankAccountWeb.Tests;
 
@@ -18,11 +20,13 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var analyticsPort = new SpyAnalyticsPort();
         var eventBus = new SpyEventBus();
         var dedupe = new InMemoryDeduplicationStore();
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
         var orderPlaced = CreateOrderPlaced("order-100", quantity: 2, totalAmount: 30m);
 
-        var paymentHandler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedupe);
-        var inventoryHandler = new InventoryOnOrderPlacedHandler(new IdempotentInventoryPortWrapper(inventoryPort));
-        var analyticsHandler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe);
+        var paymentHandler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedupe, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
+        var inventoryHandler = new InventoryOnOrderPlacedHandler(new IdempotentInventoryPortWrapper(inventoryPort), dedupe, sequenceGuardStore, NullLogger<InventoryOnOrderPlacedHandler>.Instance);
+        var analyticsHandler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe, sequenceGuardStore, NullLogger<AnalyticsOnOrderPlacedHandler>.Instance);
 
         await paymentHandler.HandleAsync(orderPlaced);
         await paymentHandler.HandleAsync(orderPlaced);
@@ -49,9 +53,10 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var eventBus = new SpyEventBus();
         var dedupe = new InMemoryDeduplicationStore();
         var paymentAuthorized = CreatePaymentAuthorized(CreateOrderPlaced("order-200", 1, 15m));
-
-        var shippingHandler = new ShippingOnPaymentAuthorizedHandler(shippingPort, eventBus, dedupe);
-        var notifyHandler = new NotifyOnPaymentAuthorizedHandler(notificationPort, dedupe);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
+        var shippingHandler = new ShippingOnPaymentAuthorizedHandler(shippingPort, eventBus, dedupe, sequenceGuardStore, sequenceAllocator, NullLogger<ShippingOnPaymentAuthorizedHandler>.Instance);
+        var notifyHandler = new NotifyOnPaymentAuthorizedHandler(notificationPort, dedupe, sequenceGuardStore, NullLogger<NotifyOnPaymentAuthorizedHandler>.Instance);
 
         await shippingHandler.HandleAsync(paymentAuthorized);
         await shippingHandler.HandleAsync(paymentAuthorized);
@@ -124,7 +129,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var tasks = Enumerable.Range(0, 20).Select(async _ =>
         {
             await using var context = new EcommerceDbContext(options);
-            var store = new EfCoreMessageDeduplicationStore(context);
+            var store = new EfCoreMessageDeduplicationStore(context, NullLogger<EfCoreMessageDeduplicationStore>.Instance);
             return await store.TryMarkProcessedAsync("ShippingOnPaymentAuthorizedHandler", eventId);
         });
 
@@ -147,7 +152,8 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var orderPlaced = CreateOrderPlaced("order-400", 1, 20m);
         var paymentAuthorized = CreatePaymentAuthorized(orderPlaced);
         var shipmentPrepared = CreateShipmentPrepared(paymentAuthorized);
-        var handler = new NotifyOnShipmentPreparedHandler(notificationPort, dedupe);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var handler = new NotifyOnShipmentPreparedHandler(notificationPort, dedupe, sequenceGuardStore, NullLogger<NotifyOnShipmentPreparedHandler>.Instance);
 
         await handler.HandleAsync(shipmentPrepared);
         await handler.HandleAsync(shipmentPrepared);
@@ -161,7 +167,8 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var analyticsPort = new SpyAnalyticsPort();
         var dedupe = new InMemoryDeduplicationStore();
         var orderPlaced = CreateOrderPlaced("order-500", 2, 35m);
-        var handler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var handler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe, sequenceGuardStore, NullLogger<AnalyticsOnOrderPlacedHandler>.Instance);
 
         await handler.HandleAsync(orderPlaced);
         await handler.HandleAsync(orderPlaced);
@@ -177,7 +184,8 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var orderPlaced = CreateOrderPlaced("order-600", 1, 25m);
         var paymentAuthorized = CreatePaymentAuthorized(orderPlaced);
         var shipmentPrepared = CreateShipmentPrepared(paymentAuthorized);
-        var handler = new NotifyOnShipmentPreparedHandler(notificationPort, dedupe);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var handler = new NotifyOnShipmentPreparedHandler(notificationPort, dedupe, sequenceGuardStore, NullLogger<NotifyOnShipmentPreparedHandler>.Instance);
 
         await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => handler.HandleAsync(shipmentPrepared)));
 
@@ -190,7 +198,8 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var analyticsPort = new SpyAnalyticsPort();
         var dedupe = new InMemoryDeduplicationStore();
         var orderPlaced = CreateOrderPlaced("order-700", 1, 10m);
-        var handler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe);
+        var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
+        var handler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe, sequenceGuardStore, NullLogger<AnalyticsOnOrderPlacedHandler>.Instance);
 
         await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => handler.HandleAsync(orderPlaced)));
 
@@ -199,7 +208,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
 
     private static OrderPlaced CreateOrderPlaced(string orderId, int quantity, decimal totalAmount)
     {
-        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), orderId);
+        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), orderId, 1);
         return new OrderPlaced(
             metadata.EventId,
             metadata.OccurredAt,
@@ -207,6 +216,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             "customer-1",
             [new CartItem("sku-1", "Item 1", quantity, 10m)],
             totalAmount);
@@ -214,7 +224,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
 
     private static PaymentAuthorized CreatePaymentAuthorized(OrderPlaced source)
     {
-        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), source);
+        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), source, 2);
         return new PaymentAuthorized(
             metadata.EventId,
             metadata.OccurredAt,
@@ -222,13 +232,14 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             source.CustomerId,
             source.TotalAmount);
     }
 
     private static ShipmentPrepared CreateShipmentPrepared(PaymentAuthorized source)
     {
-        var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), source);
+        var metadata = EventMetadata.NewChild(nameof(ShipmentPrepared), source, 1);
         return new ShipmentPrepared(
             metadata.EventId,
             metadata.OccurredAt,
@@ -236,6 +247,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             source.CustomerId,
             1);
     }
@@ -262,6 +274,11 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         {
             Published.Add(@event);
             return Task.CompletedTask;
+        }
+
+        public Task PublishAsync<TEvent>(TEvent @event, string partitionKey, CancellationToken cancellationToken = default) where TEvent : IDomainEvent
+        {
+            throw new NotImplementedException();
         }
     }
 
@@ -318,5 +335,21 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
     {
         public int SendCalls { get; private set; }
         public void Send(string message, string idempotencyKey) => SendCalls++;
+    }
+
+    private class InMemoryConsumerSequenceGuardStore : IConsumerSequenceGuardStore
+    {
+        public Task<SequenceGuardDecision> CheckAndRecordAsync(string consumerName, string orderId, long sequenceNumber, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    private class InMemoryOrderEventSequenceAllocator : IOrderEventSequenceAllocator
+    {
+        public Task<long> AllocateNextSequenceAsync(string orderId, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

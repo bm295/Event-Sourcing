@@ -1,5 +1,6 @@
 using EcommerceCheckoutFlow.Adapters.Secondary;
 using EcommerceCheckoutFlow.Domain;
+using Xunit;
 
 namespace EventSourcingBankAccountWeb.Tests;
 
@@ -58,7 +59,7 @@ public sealed class EcommerceSecondaryAdaptersIdempotencyTests
 
     private static OrderPlaced CreateOrderPlaced()
     {
-        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), "order-1");
+        var metadata = EventMetadata.NewRoot(nameof(OrderPlaced), "order-1", 1);
         return new OrderPlaced(
             metadata.EventId,
             metadata.OccurredAt,
@@ -66,6 +67,7 @@ public sealed class EcommerceSecondaryAdaptersIdempotencyTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             "customer-1",
             [new CartItem("sku-1", "Item 1", 2, 5m)],
             10m);
@@ -74,7 +76,7 @@ public sealed class EcommerceSecondaryAdaptersIdempotencyTests
     private static PaymentAuthorized CreatePaymentAuthorized()
     {
         var source = CreateOrderPlaced();
-        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), source);
+        var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), source, 1);
         return new PaymentAuthorized(
             metadata.EventId,
             metadata.OccurredAt,
@@ -82,6 +84,7 @@ public sealed class EcommerceSecondaryAdaptersIdempotencyTests
             metadata.CausationId,
             metadata.EventType,
             metadata.OrderId,
+            metadata.SequenceNumber,
             source.CustomerId,
             source.TotalAmount);
     }

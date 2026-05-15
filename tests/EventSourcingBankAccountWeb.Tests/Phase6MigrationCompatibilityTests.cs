@@ -1,6 +1,7 @@
 using EventSourcingBankAccountWeb.Infrastructure;
 using EventSourcingBankAccountWeb.Models;
 using EventSourcingBankAccountWeb.Services;
+using Xunit;
 
 namespace EventSourcingBankAccountWeb.Tests;
 
@@ -23,7 +24,7 @@ public sealed class Phase6MigrationCompatibilityTests
         var store = new InMemoryEventStore();
         var service = new DemoStateService(store, clock);
 
-        var result = service.ExecuteCommand(new ExecuteCommandRequest("WithdrawMoney", 10m, null));
+        var result = service.ExecuteCommand(new ExecuteCommandRequest("WithdrawMoney", 10m, null, "comm-1"));
 
         Assert.False(result.Success);
         var state = service.GetState();
@@ -77,6 +78,8 @@ public sealed class Phase6MigrationCompatibilityTests
                 "manual-stale",
                 "bank-account-demo",
                 3,
+                "correl-1",
+                "causa-1",
                 DateTimeOffset.Parse("2026-01-01T00:10:00+00:00"),
                 5m),
             expectedSequence: 4));

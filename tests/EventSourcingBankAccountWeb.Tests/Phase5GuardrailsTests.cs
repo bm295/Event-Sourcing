@@ -2,6 +2,7 @@ using EventSourcingBankAccountWeb.Domain;
 using EventSourcingBankAccountWeb.Infrastructure;
 using EventSourcingBankAccountWeb.Models;
 using EventSourcingBankAccountWeb.Services;
+using Xunit;
 
 namespace EventSourcingBankAccountWeb.Tests;
 
@@ -35,8 +36,8 @@ public sealed class Phase5GuardrailsTests
         var store = new InMemoryEventStore();
         var now = DateTimeOffset.Parse("2026-01-01T00:00:00+00:00");
 
-        var first = new AccountOpened("e1", "acc-1", 1, now, "owner");
-        var second = new MoneyDeposited("e2", "acc-1", 2, now.AddMinutes(1), 100m);
+        var first = new AccountOpened("e1", "acc-1", 1, "correl-1", "causa-1", now, "owner");
+        var second = new MoneyDeposited("e2", "acc-1", 2, "correl-2", "causa-2", now.AddMinutes(1), 100m);
 
         var r1 = store.Append(first, expectedSequence: 0);
         var r2 = store.Append(second, expectedSequence: 1);
@@ -44,10 +45,10 @@ public sealed class Phase5GuardrailsTests
         Assert.Equal(1, r1.SequenceNumber);
         Assert.Equal(2, r2.SequenceNumber);
 
-        var invalid = new MoneyDeposited("e3", "acc-1", 2, now.AddMinutes(2), 20m);
+        var invalid = new MoneyDeposited("e3", "acc-1", 2, "correl-3", "causa-3", now.AddMinutes(2), 20m);
         Assert.Throws<EventStoreConcurrencyException>(() => store.Append(invalid, expectedSequence: 2));
 
-        var outOfOrder = new MoneyDeposited("e4", "acc-1", 4, now.AddMinutes(3), 20m);
+        var outOfOrder = new MoneyDeposited("e4", "acc-1", 4, "correl-4", "causa-4", now.AddMinutes(3), 20m);
         Assert.Throws<EventStoreConcurrencyException>(() => store.Append(outOfOrder, expectedSequence: 2));
     }
 
@@ -58,9 +59,9 @@ public sealed class Phase5GuardrailsTests
         var store = new InMemoryEventStore();
         var service = new DemoStateService(store, clock);
 
-        service.ExecuteCommand(new ExecuteCommandRequest("OpenAccount", null, "Alice"));
-        service.ExecuteCommand(new ExecuteCommandRequest("DepositMoney", 100m, null));
-        service.ExecuteCommand(new ExecuteCommandRequest("WithdrawMoney", 40m, null));
+        service.ExecuteCommand(new ExecuteCommandRequest("OpenAccount", null, "Alice", "comm-1"));
+        service.ExecuteCommand(new ExecuteCommandRequest("DepositMoney", 100m, null, "comm-1"));
+        service.ExecuteCommand(new ExecuteCommandRequest("WithdrawMoney", 40m, null, "comm-1"));
 
         var beforeReplay = service.GetState();
         var replayed = service.Replay();
@@ -83,10 +84,10 @@ public sealed class Phase5GuardrailsTests
 
         var initialCount = service.GetState().Events.Count;
 
-        var open = service.ExecuteCommand(new ExecuteCommandRequest("OpenAccount", null, "Alice"));
+        var open = service.ExecuteCommand(new ExecuteCommandRequest("OpenAccount", null, "Alice", "comm-1"));
         var afterOpenCount = service.GetState().Events.Count;
 
-        var deposit = service.ExecuteCommand(new ExecuteCommandRequest("DepositMoney", 50m, null));
+        var deposit = service.ExecuteCommand(new ExecuteCommandRequest("DepositMoney", 50m, null, "comm-1"));
         var afterDepositCount = service.GetState().Events.Count;
 
         Assert.True(open.Success);
@@ -97,18 +98,18 @@ public sealed class Phase5GuardrailsTests
     }
 
     [Fact]
-    public void concurrent_append_handles_optimistic_concurrency()
+    public async Task concurrent_append_handles_optimistic_concurrency()
     {
         var store = new InMemoryEventStore();
         var now = DateTimeOffset.Parse("2026-01-01T00:00:00+00:00");
 
-        store.Append(new AccountOpened("e1", "acc-1", 1, now, "owner"), expectedSequence: 0);
+        store.Append(new AccountOpened("e1", "acc-1", 1, "correl-1", "causa-1", now, "owner"), expectedSequence: 0);
 
         var t1 = Task.Run(() =>
         {
             try
             {
-                store.Append(new MoneyDeposited("e2", "acc-1", 2, now.AddMinutes(1), 10m), expectedSequence: 1);
+                store.Append(new MoneyDeposited("e2", "acc-1", 2, "correl-2", "causa-2", now.AddMinutes(1), 10m), expectedSequence: 1);
                 return true;
             }
             catch (EventStoreConcurrencyException)
@@ -121,7 +122,7 @@ public sealed class Phase5GuardrailsTests
         {
             try
             {
-                store.Append(new MoneyDeposited("e3", "acc-1", 2, now.AddMinutes(2), 20m), expectedSequence: 1);
+                store.Append(new MoneyDeposited("e3", "acc-1", 2, "correl-3", "causa-3", now.AddMinutes(2), 20m), expectedSequence: 1);
                 return true;
             }
             catch (EventStoreConcurrencyException)
@@ -130,9 +131,9 @@ public sealed class Phase5GuardrailsTests
             }
         });
 
-        Task.WaitAll(t1, t2);
+        var results = await Task.WhenAll(t1, t2);
 
-        var successCount = new[] { t1.Result, t2.Result }.Count(x => x);
+        var successCount = results.Count(x => x);
         Assert.Equal(1, successCount);
         Assert.Equal(2, store.ReadRecords("acc-1").Count);
     }
