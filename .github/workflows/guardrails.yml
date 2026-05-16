@@ -19,7 +19,7 @@ jobs:
           dotnet-version: 9.0.x
 
       - name: Restore
-        run: dotnet restore MultiThreadAutoResetEvent.sln
+        run: dotnet restore EventSourcing.sln
 
       - name: Run mandatory guardrail tests
         run: dotnet test tests/EventSourcingBankAccountWeb.Tests/EventSourcingBankAccountWeb.Tests.csproj --configuration Release --no-restore --filter "FullyQualifiedName~Guardrail|FullyQualifiedName~Architecture|FullyQualifiedName~Metadata|FullyQualifiedName~Replay|FullyQualifiedName~Idempotency"
