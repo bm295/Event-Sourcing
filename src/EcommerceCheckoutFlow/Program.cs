@@ -39,6 +39,7 @@ builder.Services
 
 builder.Services
     .AddSingleton<IEventBus, CapEventBus>()
+    .AddSingleton<ICapTransactionCoordinator, CapTransactionCoordinator>()
     .AddSingleton<CheckoutReadModelProjector>()
     .AddSingleton<IReplayStateRebuilder, RebuildStateService>()
     .AddSingleton<CheckoutUseCase>()

@@ -153,7 +153,7 @@ public sealed class Phase5GuardrailsTests
     [Fact]
     public void architecture_forbids_command_handler_editing_past_events()
     {
-        var body = File.ReadAllText(Path.Combine("..", "..", "..", "..", "src", "EventSourcingBankAccountWeb", "Services", "DemoStateService.cs"));
+        var body = File.ReadAllText(Path.Combine("..", "..", "..", "..", "..", "src", "EventSourcingBankAccountWeb", "Services", "DemoStateService.cs"));
 
         Assert.DoesNotContain("Update(", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Delete(", body, StringComparison.Ordinal);

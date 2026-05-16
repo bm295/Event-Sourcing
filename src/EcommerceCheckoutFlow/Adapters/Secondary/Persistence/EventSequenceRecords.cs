@@ -41,7 +41,6 @@ public sealed class EfCoreConsumerSequenceGuardStore(EcommerceDbContext dbContex
         var record = await dbContext.ConsumerOrderSequences.SingleOrDefaultAsync(x => x.ConsumerName == consumerName && x.OrderId == orderId, cancellationToken);
         if (record is null)
         {
-            if (sequenceNumber != 1) return SequenceGuardDecision.OutOfOrder;
             dbContext.ConsumerOrderSequences.Add(new ConsumerOrderSequenceRecord { ConsumerName = consumerName, OrderId = orderId, LastSequenceNumber = sequenceNumber });
             await dbContext.SaveChangesAsync(cancellationToken);
             return SequenceGuardDecision.Accept;

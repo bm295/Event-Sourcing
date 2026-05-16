@@ -278,7 +278,8 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
 
         public Task PublishAsync<TEvent>(TEvent @event, string partitionKey, CancellationToken cancellationToken = default) where TEvent : IDomainEvent
         {
-            throw new NotImplementedException();
+            Published.Add(@event);
+            return Task.CompletedTask;
         }
     }
 
@@ -339,17 +340,52 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
 
     private class InMemoryConsumerSequenceGuardStore : IConsumerSequenceGuardStore
     {
+        private readonly Dictionary<string, long> _lastSequenceByConsumerAndOrder = new();
+        private readonly object _gate = new();
+
         public Task<SequenceGuardDecision> CheckAndRecordAsync(string consumerName, string orderId, long sequenceNumber, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            lock (_gate)
+            {
+                var key = $"{consumerName}:{orderId}";
+                if (!_lastSequenceByConsumerAndOrder.TryGetValue(key, out var lastSequence))
+                {
+                    _lastSequenceByConsumerAndOrder[key] = sequenceNumber;
+                    return Task.FromResult(SequenceGuardDecision.Accept);
+                }
+
+                if (sequenceNumber <= lastSequence)
+                {
+                    return Task.FromResult(SequenceGuardDecision.Duplicate);
+                }
+
+                if (sequenceNumber != lastSequence + 1)
+                {
+                    return Task.FromResult(SequenceGuardDecision.OutOfOrder);
+                }
+
+                _lastSequenceByConsumerAndOrder[key] = sequenceNumber;
+                return Task.FromResult(SequenceGuardDecision.Accept);
+            }
         }
     }
 
     private class InMemoryOrderEventSequenceAllocator : IOrderEventSequenceAllocator
     {
+        private readonly Dictionary<string, long> _orderSequences = new();
+        private readonly object _gate = new();
+
         public Task<long> AllocateNextSequenceAsync(string orderId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            lock (_gate)
+            {
+                var nextSequence = _orderSequences.TryGetValue(orderId, out var lastSequence)
+                    ? lastSequence + 1
+                    : 1;
+
+                _orderSequences[orderId] = nextSequence;
+                return Task.FromResult(nextSequence);
+            }
         }
     }
 }

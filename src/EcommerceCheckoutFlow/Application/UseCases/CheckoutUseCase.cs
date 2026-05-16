@@ -1,4 +1,3 @@
-using DotNetCore.CAP;
 using EcommerceCheckoutFlow.Adapters.Secondary.Persistence;
 using EcommerceCheckoutFlow.Application;
 using EcommerceCheckoutFlow.Application.Ports;
@@ -6,7 +5,7 @@ using EcommerceCheckoutFlow.Domain;
 
 namespace EcommerceCheckoutFlow.Application.UseCases;
 
-public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher capPublisher, IEventBus eventBus, IOrderEventSequenceAllocator sequenceAllocator)
+public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapTransactionCoordinator transactionCoordinator, IEventBus eventBus, IOrderEventSequenceAllocator sequenceAllocator)
 {
     public async Task PlaceOrderAsync(
         string orderId,
@@ -30,7 +29,7 @@ public sealed class CheckoutUseCase(EcommerceDbContext dbContext, ICapPublisher 
             order.Items,
             order.TotalAmount);
 
-        using var transaction = dbContext.Database.BeginTransaction(capPublisher, autoCommit: false);
+        using var transaction = transactionCoordinator.BeginTransaction(dbContext, autoCommit: false);
 
         dbContext.Orders.Add(OrderRecord.From(order));
         await dbContext.SaveChangesAsync(cancellationToken);
