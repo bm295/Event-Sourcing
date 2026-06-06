@@ -16,9 +16,15 @@ public sealed class InventoryOnOrderPlacedHandler(
     public async Task HandleAsync(OrderPlaced @event)
     {
         const string consumerName = nameof(InventoryOnOrderPlacedHandler);
-        var (_, _, decision) = await ConsumerEventGuard.ValidateAndLogAsync(logger, sequenceGuardStore, consumerName, @event);
-        if (decision != SequenceGuardDecision.Accept) return;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, @event.EventId)) return;
+
+        var validationResult = await OrderPlacedHandlersHelper.GuardAndDeduplicateAsync(
+            logger,
+            sequenceGuardStore,
+            deduplicationStore,
+            consumerName,
+            @event);
+
+        if (validationResult is null) return;
         inventoryPort.ReserveItems(@event, $"{consumerName}:{@event.EventId}");
     }
 }
@@ -35,9 +41,15 @@ public sealed class PaymentOnOrderPlacedHandler(
     public async Task HandleAsync(OrderPlaced @event)
     {
         const string consumerName = nameof(PaymentOnOrderPlacedHandler);
-        var (_, partitionKey, decision) = await ConsumerEventGuard.ValidateAndLogAsync(logger, sequenceGuardStore, consumerName, @event);
-        if (decision != SequenceGuardDecision.Accept) return;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, @event.EventId)) return;
+        var validationResult = await OrderPlacedHandlersHelper.GuardAndDeduplicateAsync(
+            logger,
+            sequenceGuardStore,
+            deduplicationStore,
+            consumerName,
+            @event);
+
+        if (validationResult is null) return;
+        var partitionKey = validationResult.PartitionKey;
 
         try
         {
@@ -67,9 +79,48 @@ public sealed class AnalyticsOnOrderPlacedHandler(
     public async Task HandleAsync(OrderPlaced @event)
     {
         const string consumerName = nameof(AnalyticsOnOrderPlacedHandler);
-        var (_, _, decision) = await ConsumerEventGuard.ValidateAndLogAsync(logger, sequenceGuardStore, consumerName, @event);
-        if (decision != SequenceGuardDecision.Accept) return;
-        if (!await deduplicationStore.TryMarkProcessedAsync(consumerName, @event.EventId)) return;
+        var validationResult = await OrderPlacedHandlersHelper.GuardAndDeduplicateAsync(
+            logger,
+            sequenceGuardStore,
+            deduplicationStore,
+            consumerName,
+            @event);
+
+        if (validationResult is null) return;
         analyticsPort.TrackOrder(@event);
+    }
+}
+
+internal static class OrderPlacedHandlersHelper
+{
+    public static async Task<ConsumerEventValidationResult?> GuardAndDeduplicateAsync(
+        ILogger logger,
+        IConsumerSequenceGuardStore sequenceGuardStore,
+        IMessageDeduplicationStore deduplicationStore,
+        string consumerName,
+        IEventEnvelope @event,
+        CancellationToken cancellationToken = default)
+    {
+        var validationResult = await ConsumerEventGuard.ValidateAndLogAsync(
+            logger,
+            sequenceGuardStore,
+            consumerName,
+            @event,
+            cancellationToken);
+
+        if (validationResult.Decision != SequenceGuardDecision.Accept)
+        {
+            return null;
+        }
+
+        if (!await deduplicationStore.TryMarkProcessedAsync(
+                consumerName,
+                @event.EventId,
+                cancellationToken))
+        {
+            return null;
+        }
+
+        return validationResult;
     }
 }
