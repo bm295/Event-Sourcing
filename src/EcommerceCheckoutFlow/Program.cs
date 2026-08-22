@@ -35,16 +35,17 @@ builder.Services
     .AddSingleton<IShippingPort>(sp => sp.GetRequiredService<InMemoryShippingAdapter>())
     .AddSingleton<IAnalyticsPort>(sp => sp.GetRequiredService<InMemoryAnalyticsAdapter>())
     .AddSingleton<INotificationPort>(sp => sp.GetRequiredService<ConsoleNotificationAdapter>())
+    .AddScoped<IOrderStore, EfCoreOrderStore>()
     .AddScoped<IMessageDeduplicationStore, EfCoreMessageDeduplicationStore>();
 
 builder.Services
     .AddSingleton<IEventBus, CapEventBus>()
-    .AddSingleton<ICapTransactionCoordinator, CapTransactionCoordinator>()
+    .AddScoped<ICheckoutTransactionManager, CapTransactionManager>()
     .AddSingleton<CheckoutReadModelProjector>()
     .AddSingleton<IReplayStateRebuilder, RebuildStateService>()
-    .AddSingleton<CheckoutUseCase>()
+    .AddScoped<CheckoutUseCase>()
     .AddSingleton<DemoOrderFactory>()
-    .AddSingleton<CheckoutCliAdapter>()
+    .AddScoped<CheckoutCliAdapter>()
     .AddSingleton<InventoryOnOrderPlacedHandler>()
     .AddSingleton<PaymentOnOrderPlacedHandler>()
     .AddSingleton<AnalyticsOnOrderPlacedHandler>()
@@ -74,8 +75,11 @@ using (var scope = app.Services.CreateScope())
     await dbContext.Database.EnsureCreatedAsync();
 }
 
-var cliAdapter = app.Services.GetRequiredService<CheckoutCliAdapter>();
-await cliAdapter.RunDemoAsync();
+using (var scope = app.Services.CreateScope())
+{
+    var cliAdapter = scope.ServiceProvider.GetRequiredService<CheckoutCliAdapter>();
+    await cliAdapter.RunDemoAsync();
+}
 
 // CAP subscribers run in background hosted services.
 await Task.Delay(300);

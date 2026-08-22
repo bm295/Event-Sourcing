@@ -10,7 +10,7 @@ This project demonstrates a checkout workflow built with hexagonal architecture,
   - `IEventEnvelope` is required for published domain events and carries `EventId`, `OccurredAt`, `CorrelationId`, `CausationId`, `EventType`, `OrderId`, and `SequenceNumber`.
   - `EventMetadata.NewRoot(...)` creates the first event in a workflow. `EventMetadata.NewChild(...)` preserves correlation, points causation at the source event, and assigns the next per-order sequence.
 - `Application/`
-  - `UseCases/CheckoutUseCase` is the main application input. It creates the order, allocates the next sequence number, stores the order record, and publishes `OrderPlaced` inside the CAP/EF transaction boundary.
+  - `UseCases/CheckoutUseCase` is the main application input. It creates the order, allocates the next sequence number, stores the order through `IOrderStore`, and publishes `OrderPlaced` inside the transaction exposed by `ICheckoutTransactionManager`.
   - `Ports/` contains outbound dependencies for inventory, payment, shipping, notification, analytics, event publishing, message deduplication, and per-order sequence tracking.
   - `EventTopics` centralizes CAP topic names.
   - `Handlers/` contains runtime CAP subscribers that orchestrate side effects and follow-up events.
@@ -22,6 +22,7 @@ This project demonstrates a checkout workflow built with hexagonal architecture,
   - In-memory adapters implement inventory, payment, shipping, analytics, and notification ports.
   - `CapEventBus` is the only adapter that calls CAP publish APIs for checkout domain events.
   - `Persistence/EcommerceDbContext` stores order records, processed-message records, order sequence state, and consumer sequence state.
+  - `Persistence/EfCoreOrderStore` and `CapTransactionManager` implement the application-owned persistence and transaction ports, keeping EF Core and CAP types out of application code.
 
 ## Runtime Flow
 
@@ -78,7 +79,7 @@ Every checkout event implements `IEventEnvelope`.
 Publish rules:
 
 - Application publish calls go through `IEventBus`, not raw `ICapPublisher`.
-- `CheckoutUseCase` uses `ICapPublisher` only to open the EF/CAP transaction boundary.
+- `CheckoutUseCase` uses `ICheckoutTransactionManager` to open the atomic checkout boundary and does not reference EF Core or CAP transaction types.
 - Domain events are published with `OrderId` partition affinity.
 - `CapEventBus` sets CAP header `partitionKey=<OrderId>`.
 - Follow-up events allocate a new sequence number for the same `OrderId` before publishing.

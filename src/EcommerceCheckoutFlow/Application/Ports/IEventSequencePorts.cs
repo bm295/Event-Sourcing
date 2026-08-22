@@ -1,6 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
-
 namespace EcommerceCheckoutFlow.Application.Ports;
 
 public interface IOrderEventSequenceAllocator
@@ -8,9 +5,14 @@ public interface IOrderEventSequenceAllocator
     Task<long> AllocateNextSequenceAsync(string orderId, CancellationToken cancellationToken = default);
 }
 
-public interface ICapTransactionCoordinator
+public interface ICheckoutTransaction : IDisposable
 {
-    IDbContextTransaction BeginTransaction(DbContext dbContext, bool autoCommit = false);
+    void Commit();
+}
+
+public interface ICheckoutTransactionManager
+{
+    ICheckoutTransaction Begin();
 }
 
 public enum SequenceGuardDecision

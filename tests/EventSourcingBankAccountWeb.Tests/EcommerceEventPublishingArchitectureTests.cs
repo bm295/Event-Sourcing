@@ -10,6 +10,27 @@ public sealed class EcommerceEventPublishingArchitectureTests
     private static readonly string ApplicationRoot = Path.Combine(EcommerceRoot, "Application");
 
     [Fact]
+    public void application_layer_must_not_depend_on_secondary_adapters_or_entity_framework()
+    {
+        var csFiles = Directory.GetFiles(ApplicationRoot, "*.cs", SearchOption.AllDirectories);
+        var offenders = new List<string>();
+
+        foreach (var file in csFiles)
+        {
+            var content = File.ReadAllText(file);
+            if (content.Contains("EcommerceCheckoutFlow.Adapters", StringComparison.Ordinal)
+                || content.Contains("Microsoft.EntityFrameworkCore", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetRelativePath(RepoRoot, file));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            $"Application code must depend on application ports, not adapter technologies. Offenders: {string.Join(", ", offenders)}");
+    }
+
+    [Fact]
     public void publish_calls_in_application_layer_must_use_standardized_event_bus_abstraction()
     {
         var csFiles = Directory.GetFiles(ApplicationRoot, "*.cs", SearchOption.AllDirectories);
