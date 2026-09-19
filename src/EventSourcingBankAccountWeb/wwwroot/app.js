@@ -167,6 +167,7 @@ function renderEvents() {
       <td class="mono-cell">${eventRecord.eventId}</td>
       <td class="mono-cell">${eventRecord.correlationId}</td>
       <td class="mono-cell">${eventRecord.causationId ?? "—"}</td>
+      <td><span class="pill">${eventRecord.signatureValid ? "Verified" : "Invalid"}</span></td>
     `;
     row.addEventListener("click", () => {
       state.selectedEventId = eventRecord.eventId;
@@ -194,6 +195,8 @@ function renderSelectedEvent() {
       <p><strong>Created:</strong> ${new Date(eventRecord.createdAtUtc).toLocaleString()}</p>
       <p><strong>Correlation Id:</strong> <code>${eventRecord.correlationId}</code></p>
       <p><strong>Causation Id:</strong> <code>${eventRecord.causationId ?? "—"}</code></p>
+      <p><strong>Data signature:</strong> <code>${eventRecord.dataSignature}</code></p>
+      <p><strong>Signature status:</strong> ${eventRecord.signatureValid ? "Verified" : "Invalid"} (${eventRecord.signatureAlgorithm})</p>
     </div>
     <div>
       <strong>Payload</strong>
