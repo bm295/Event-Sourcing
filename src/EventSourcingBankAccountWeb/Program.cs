@@ -1,10 +1,19 @@
 using EventSourcingBankAccountWeb.Infrastructure;
 using EventSourcingBankAccountWeb.Models;
 using EventSourcingBankAccountWeb.Services;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<IEventDataSigner>(_ =>
+{
+    var configuredKey = builder.Configuration["EventSigning:Key"];
+    var key = string.IsNullOrWhiteSpace(configuredKey)
+        ? RandomNumberGenerator.GetBytes(32)
+        : Convert.FromBase64String(configuredKey);
+    return new HmacEventDataSigner(key);
+});
 builder.Services.AddSingleton<IEventStore, InMemoryEventStore>();
 builder.Services.AddSingleton<DemoStateService>();
 

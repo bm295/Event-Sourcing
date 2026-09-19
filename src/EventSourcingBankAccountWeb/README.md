@@ -25,6 +25,10 @@ Every persisted event is stored as an immutable envelope with these required fie
 - `CorrelationId`: shared workflow identifier propagated across all events in the same business flow.
 - `CausationId`: direct predecessor identifier (typically the command id or upstream event id) that caused this event.
 - `PayloadJson`: serialized event payload.
+- `DataSignature`: an HMAC-SHA256 signature over `PayloadJson`, verified before an event is replayed.
+
+The signing key can be supplied as a base64-encoded 256-bit (or longer) value in
+`EventSigning:Key`. The demo generates an ephemeral key at startup when no key is configured.
 
 Causality propagation rules:
 1. The UI/application-service creates a `CorrelationId` at command entry and keeps it stable for the whole flow.

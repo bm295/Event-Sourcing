@@ -49,7 +49,10 @@ public sealed record EventRecord(
     string CorrelationId,
     string? CausationId,
     DateTimeOffset CreatedAtUtc,
-    string PayloadJson);
+    string PayloadJson,
+    string DataSignature,
+    string SignatureAlgorithm,
+    bool SignatureValid);
 
 public sealed record FlowStep(
     string Title,

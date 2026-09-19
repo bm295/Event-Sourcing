@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using EventSourcingBankAccountWeb.Domain;
 using EventSourcingBankAccountWeb.Models;
@@ -8,6 +9,17 @@ public sealed class InMemoryEventStore : IEventStore
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, List<StoredEvent>> _streams = new();
+    private readonly IEventDataSigner _signer;
+
+    public InMemoryEventStore()
+        : this(new HmacEventDataSigner(RandomNumberGenerator.GetBytes(32)))
+    {
+    }
+
+    public InMemoryEventStore(IEventDataSigner signer)
+    {
+        _signer = signer;
+    }
 
     public IReadOnlyList<BankAccountEvent> ReadStream(string streamId)
     {
@@ -15,7 +27,7 @@ public sealed class InMemoryEventStore : IEventStore
         {
             return GetStream(streamId)
                 .OrderBy(e => e.SequenceNumber)
-                .Select(e => e.DomainEvent)
+                .Select(VerifyAndRead)
                 .ToList();
         }
     }
@@ -45,9 +57,10 @@ public sealed class InMemoryEventStore : IEventStore
                 throw new EventStoreConcurrencyException(@event.StreamId, expectedNextSequence, @event.SequenceNumber);
             }
 
-            var stored = new StoredEvent(@event);
+            var payloadJson = JsonSerializer.Serialize(@event, @event.GetType(), JsonOptions);
+            var stored = new StoredEvent(@event, payloadJson, _signer.Sign(payloadJson), _signer.Algorithm);
             stream.Add(stored);
-            return stored.ToRecord();
+            return stored.ToRecord(signatureValid: true);
         }
     }
 
@@ -57,7 +70,7 @@ public sealed class InMemoryEventStore : IEventStore
         {
             return GetStream(streamId)
                 .OrderBy(e => e.SequenceNumber)
-                .Select(e => e.ToRecord())
+                .Select(e => e.ToRecord(_signer.Verify(e.PayloadJson, e.DataSignature)))
                 .ToList();
         }
     }
@@ -75,18 +88,34 @@ public sealed class InMemoryEventStore : IEventStore
         return stream;
     }
 
+    private BankAccountEvent VerifyAndRead(StoredEvent storedEvent)
+    {
+        if (!_signer.Verify(storedEvent.PayloadJson, storedEvent.DataSignature))
+        {
+            throw new EventDataIntegrityException(storedEvent.EventId);
+        }
+
+        return storedEvent.DomainEvent;
+    }
+
     private sealed class StoredEvent
     {
-        public StoredEvent(BankAccountEvent domainEvent)
+        public StoredEvent(BankAccountEvent domainEvent, string payloadJson, string dataSignature, string signatureAlgorithm)
         {
             DomainEvent = domainEvent;
+            PayloadJson = payloadJson;
+            DataSignature = dataSignature;
+            SignatureAlgorithm = signatureAlgorithm;
         }
 
         public string EventId => DomainEvent.EventId;
         public int SequenceNumber => DomainEvent.SequenceNumber;
         public BankAccountEvent DomainEvent { get; }
+        public string PayloadJson { get; }
+        public string DataSignature { get; }
+        public string SignatureAlgorithm { get; }
 
-        public EventRecord ToRecord()
+        public EventRecord ToRecord(bool signatureValid)
         {
             return new EventRecord(
                 DomainEvent.EventId,
@@ -97,7 +126,10 @@ public sealed class InMemoryEventStore : IEventStore
                 DomainEvent.CorrelationId,
                 DomainEvent.CausationId,
                 DomainEvent.CreatedAtUtc,
-                JsonSerializer.Serialize(DomainEvent, DomainEvent.GetType(), JsonOptions));
+                PayloadJson,
+                DataSignature,
+                SignatureAlgorithm,
+                signatureValid);
         }
     }
 
