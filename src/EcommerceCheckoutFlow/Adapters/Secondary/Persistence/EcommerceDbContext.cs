@@ -11,8 +11,22 @@ public sealed class EcommerceDbContext(DbContextOptions<EcommerceDbContext> opti
     public DbSet<OrderEventSequenceRecord> OrderEventSequences => Set<OrderEventSequenceRecord>();
     public DbSet<ConsumerOrderSequenceRecord> ConsumerOrderSequences => Set<ConsumerOrderSequenceRecord>();
 
+    public DbSet<PaymentProcessingRecord> PaymentProcessing => Set<PaymentProcessingRecord>();
+    public DbSet<PaymentAuthorizationRecord> PaymentAuthorizations => Set<PaymentAuthorizationRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<PaymentProcessingRecord>(entity =>
+        {
+            entity.ToTable("payment_processing");
+            entity.HasKey(x => x.InputEventId);
+        });
+        modelBuilder.Entity<PaymentAuthorizationRecord>(entity =>
+        {
+            entity.ToTable("payment_authorizations");
+            entity.HasKey(x => x.IdempotencyKey);
+        });
+
         modelBuilder.Entity<OrderRecord>(entity =>
         {
             entity.ToTable("orders");

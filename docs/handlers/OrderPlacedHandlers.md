@@ -1,3 +1,5 @@
+> Payment handling changed in [ADR 0004](../adr/0004-payment-outcome-recovery.md). The payment handler now uses a durable outcome journal; older payment flow diagrams below describe the previous implementation. Non-payment handlers retain the legacy guard flow.
+
 # OrderPlacedHandlers Documentation
 
 ## Overview

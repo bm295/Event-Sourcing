@@ -16,8 +16,8 @@ Accepted - 2026-05-14
 - Application code may use `ICapPublisher` to open the EF/CAP transaction boundary, but not to publish checkout domain events directly.
 - Raw CAP publish calls for checkout domain events are isolated to `CapEventBus`.
 - `CapEventBus` maps domain event types to CAP topics and sets `partitionKey=<OrderId>`.
-- Runtime subscribers must validate ordering with `ConsumerEventGuard` before side effects.
-- Runtime subscribers must call `IMessageDeduplicationStore.TryMarkProcessedAsync(consumerName, eventId)` before side effects.
+- Legacy non-payment subscribers validate ordering with `ConsumerEventGuard` before side effects. Payment recovery supersedes this rule as described in ADR 0004.
+- Legacy non-payment subscribers call `IMessageDeduplicationStore.TryMarkProcessedAsync(consumerName, eventId)` before side effects. This does not guarantee recovery after a crash. Payment uses a durable outcome journal and marks completion after publishing (ADR 0004).
 - Secondary adapters that can cause side effects must receive stable idempotency keys.
 - Replay/rebuild jobs must use projector code only and must not execute CAP subscriber handlers.
 - Delayed CAP publishing is exposed only as a sample endpoint in `PublishController`; checkout domain workflow events remain immediate publishes through `IEventBus`.

@@ -24,7 +24,7 @@ public sealed class ReplayAndIdempotencyGuardrailsTests
         var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
         var orderPlaced = CreateOrderPlaced("order-100", quantity: 2, totalAmount: 30m);
 
-        var paymentHandler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedupe, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
+        var paymentHandler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, new TestPaymentProcessingStore(), NullLogger<PaymentOnOrderPlacedHandler>.Instance);
         var inventoryHandler = new InventoryOnOrderPlacedHandler(new IdempotentInventoryPortWrapper(inventoryPort), dedupe, sequenceGuardStore, NullLogger<InventoryOnOrderPlacedHandler>.Instance);
         var analyticsHandler = new AnalyticsOnOrderPlacedHandler(analyticsPort, dedupe, sequenceGuardStore, NullLogger<AnalyticsOnOrderPlacedHandler>.Instance);
 

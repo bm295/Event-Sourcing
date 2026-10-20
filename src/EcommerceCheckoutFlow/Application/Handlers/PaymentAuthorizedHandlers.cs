@@ -12,9 +12,9 @@ public sealed class ShippingOnPaymentAuthorizedHandler(
     IMessageDeduplicationStore deduplicationStore,
     IConsumerSequenceGuardStore sequenceGuardStore,
     IOrderEventSequenceAllocator sequenceAllocator,
-    ILogger<ShippingOnPaymentAuthorizedHandler> logger)
+    ILogger<ShippingOnPaymentAuthorizedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.PaymentAuthorized)]
+    [CapSubscribe(EventTopics.PaymentAuthorized, Group = nameof(ShippingOnPaymentAuthorizedHandler))]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
         const string consumerName = nameof(ShippingOnPaymentAuthorizedHandler);
@@ -33,9 +33,9 @@ public sealed class NotifyOnPaymentAuthorizedHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore,
     IConsumerSequenceGuardStore sequenceGuardStore,
-    ILogger<NotifyOnPaymentAuthorizedHandler> logger)
+    ILogger<NotifyOnPaymentAuthorizedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.PaymentAuthorized)]
+    [CapSubscribe(EventTopics.PaymentAuthorized, Group = nameof(NotifyOnPaymentAuthorizedHandler))]
     public async Task HandleAsync(PaymentAuthorized @event)
     {
         const string consumerName = nameof(NotifyOnPaymentAuthorizedHandler);

@@ -10,9 +10,9 @@ public sealed class InventoryOnOrderPlacedHandler(
     IInventoryPort inventoryPort,
     IMessageDeduplicationStore deduplicationStore,
     IConsumerSequenceGuardStore sequenceGuardStore,
-    ILogger<InventoryOnOrderPlacedHandler> logger)
+    ILogger<InventoryOnOrderPlacedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.OrderPlaced)]
+    [CapSubscribe(EventTopics.OrderPlaced, Group = nameof(InventoryOnOrderPlacedHandler))]
     public async Task HandleAsync(OrderPlaced @event)
     {
         const string consumerName = nameof(InventoryOnOrderPlacedHandler);
@@ -32,40 +32,51 @@ public sealed class InventoryOnOrderPlacedHandler(
 public sealed class PaymentOnOrderPlacedHandler(
     IPaymentPort paymentPort,
     IEventBus eventBus,
-    IMessageDeduplicationStore deduplicationStore,
-    IConsumerSequenceGuardStore sequenceGuardStore,
-    IOrderEventSequenceAllocator sequenceAllocator,
-    ILogger<PaymentOnOrderPlacedHandler> logger)
+    IPaymentProcessingStore processingStore,
+    ILogger<PaymentOnOrderPlacedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.OrderPlaced)]
+    [CapSubscribe(EventTopics.OrderPlaced, Group = nameof(PaymentOnOrderPlacedHandler))]
     public async Task HandleAsync(OrderPlaced @event)
     {
-        const string consumerName = nameof(PaymentOnOrderPlacedHandler);
-        var validationResult = await OrderPlacedHandlersHelper.GuardAndDeduplicateAsync(
-            logger,
-            sequenceGuardStore,
-            deduplicationStore,
-            consumerName,
-            @event);
+        if (@event.EventId == Guid.Empty || string.IsNullOrWhiteSpace(@event.OrderId) || @event.SequenceNumber < 1)
+            throw new InvalidOperationException("Invalid payment input event metadata.");
 
-        if (validationResult is null) return;
-        var partitionKey = validationResult.PartitionKey;
+        var state = await processingStore.FindAsync(@event.EventId);
+        if (state?.Completed == true) return;
 
-        try
+        if (state is null)
         {
-            paymentPort.Authorize(@event, $"{consumerName}:{@event.EventId}");
-            var seq = await sequenceAllocator.AllocateNextSequenceAsync(@event.OrderId);
-            var metadata = EventMetadata.NewChild(nameof(PaymentAuthorized), @event, seq);
-            var next = new PaymentAuthorized(metadata.EventId, metadata.OccurredAt, metadata.CorrelationId, metadata.CausationId, metadata.EventType, metadata.OrderId, metadata.SequenceNumber, @event.CustomerId, @event.TotalAmount);
-            await eventBus.PublishAsync(next, partitionKey);
+            string? declineReason = null;
+            try
+            {
+                paymentPort.Authorize(@event, $"{nameof(PaymentOnOrderPlacedHandler)}:{@event.EventId}");
+            }
+            catch (PaymentDeclinedException ex)
+            {
+                declineReason = ex.Message;
+            }
+
+            // Like ENode's persisted event stream, reuse the saved outcome on
+            // redelivery. Never rerun a successful authorization to republish it.
+            state = await processingStore.SaveOutcomeAsync(@event, declineReason);
         }
-        catch (Exception ex)
+
+        // Publish errors are infrastructure failures, never payment rejections.
+        // An ambiguous publish may be retried; the immutable EventId permits
+        // downstream deduplication (delivery remains at least once).
+        switch (state.Outcome)
         {
-            var seq = await sequenceAllocator.AllocateNextSequenceAsync(@event.OrderId);
-            var metadata = EventMetadata.NewChild(nameof(PaymentFailed), @event, seq);
-            var failed = new PaymentFailed(metadata.EventId, metadata.OccurredAt, metadata.CorrelationId, metadata.CausationId, metadata.EventType, metadata.OrderId, metadata.SequenceNumber, @event.CustomerId, @event.TotalAmount, ex.Message);
-            await eventBus.PublishAsync(failed, partitionKey);
+            case PaymentAuthorized authorized:
+                await eventBus.PublishAsync(authorized, authorized.GetPartitionKey());
+                break;
+            case PaymentFailed failed:
+                await eventBus.PublishAsync(failed, failed.GetPartitionKey());
+                break;
+            default:
+                throw new InvalidOperationException("Unsupported payment outcome.");
         }
+        await processingStore.CompleteAsync(@event.EventId);
+        logger.LogInformation("Payment consumer completed input {EventId}", @event.EventId);
     }
 }
 
@@ -73,9 +84,9 @@ public sealed class AnalyticsOnOrderPlacedHandler(
     IAnalyticsPort analyticsPort,
     IMessageDeduplicationStore deduplicationStore,
     IConsumerSequenceGuardStore sequenceGuardStore,
-    ILogger<AnalyticsOnOrderPlacedHandler> logger)
+    ILogger<AnalyticsOnOrderPlacedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.OrderPlaced)]
+    [CapSubscribe(EventTopics.OrderPlaced, Group = nameof(AnalyticsOnOrderPlacedHandler))]
     public async Task HandleAsync(OrderPlaced @event)
     {
         const string consumerName = nameof(AnalyticsOnOrderPlacedHandler);

@@ -10,9 +10,9 @@ public sealed class NotifyOnShipmentPreparedHandler(
     INotificationPort notificationPort,
     IMessageDeduplicationStore deduplicationStore,
     IConsumerSequenceGuardStore sequenceGuardStore,
-    ILogger<NotifyOnShipmentPreparedHandler> logger)
+    ILogger<NotifyOnShipmentPreparedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.ShipmentPrepared)]
+    [CapSubscribe(EventTopics.ShipmentPrepared, Group = nameof(NotifyOnShipmentPreparedHandler))]
     public async Task HandleAsync(ShipmentPrepared @event)
     {
         const string consumerName = nameof(NotifyOnShipmentPreparedHandler);

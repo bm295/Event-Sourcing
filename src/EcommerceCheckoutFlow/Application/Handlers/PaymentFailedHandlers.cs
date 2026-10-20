@@ -11,9 +11,9 @@ public sealed class CancelOrderOnPaymentFailedHandler(
     IMessageDeduplicationStore deduplicationStore,
     IConsumerSequenceGuardStore sequenceGuardStore,
     IOrderEventSequenceAllocator sequenceAllocator,
-    ILogger<CancelOrderOnPaymentFailedHandler> logger)
+    ILogger<CancelOrderOnPaymentFailedHandler> logger) : ICapSubscribe
 {
-    [CapSubscribe(EventTopics.PaymentFailed)]
+    [CapSubscribe(EventTopics.PaymentFailed, Group = nameof(CancelOrderOnPaymentFailedHandler))]
     public async Task HandleAsync(PaymentFailed @event)
     {
         const string consumerName = nameof(CancelOrderOnPaymentFailedHandler);
