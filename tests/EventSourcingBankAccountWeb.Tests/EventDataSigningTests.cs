@@ -1,3 +1,4 @@
+using Xunit;
 using EventSourcingBankAccountWeb.Domain;
 using EventSourcingBankAccountWeb.Infrastructure;
 
