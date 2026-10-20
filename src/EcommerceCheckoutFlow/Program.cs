@@ -24,14 +24,16 @@ builder.Services.AddControllers();
 
 builder.Services
     .AddSingleton<InMemoryInventoryAdapter>()
-    .AddSingleton<InMemoryPaymentAdapter>()
     .AddSingleton<InMemoryShippingAdapter>()
     .AddSingleton<InMemoryAnalyticsAdapter>()
     .AddSingleton<ConsoleNotificationAdapter>();
 
 builder.Services
     .AddSingleton<IInventoryPort>(sp => sp.GetRequiredService<InMemoryInventoryAdapter>())
-    .AddSingleton<IPaymentPort>(sp => sp.GetRequiredService<InMemoryPaymentAdapter>())
+    .AddScoped<IPaymentPort, PersistentPaymentAdapter>()
+    .AddScoped<IPaymentProcessingStore, EfCorePaymentProcessingStore>()
+    .AddScoped<IOrderEventSequenceAllocator, EfCoreOrderEventSequenceAllocator>()
+    .AddScoped<IConsumerSequenceGuardStore, EfCoreConsumerSequenceGuardStore>()
     .AddSingleton<IShippingPort>(sp => sp.GetRequiredService<InMemoryShippingAdapter>())
     .AddSingleton<IAnalyticsPort>(sp => sp.GetRequiredService<InMemoryAnalyticsAdapter>())
     .AddSingleton<INotificationPort>(sp => sp.GetRequiredService<ConsoleNotificationAdapter>())
@@ -39,19 +41,20 @@ builder.Services
     .AddScoped<IMessageDeduplicationStore, EfCoreMessageDeduplicationStore>();
 
 builder.Services
-    .AddSingleton<IEventBus, CapEventBus>()
+    .AddScoped<IEventBus, CapEventBus>()
     .AddScoped<ICheckoutTransactionManager, CapTransactionManager>()
     .AddSingleton<CheckoutReadModelProjector>()
     .AddSingleton<IReplayStateRebuilder, RebuildStateService>()
     .AddScoped<CheckoutUseCase>()
     .AddSingleton<DemoOrderFactory>()
     .AddScoped<CheckoutCliAdapter>()
-    .AddSingleton<InventoryOnOrderPlacedHandler>()
-    .AddSingleton<PaymentOnOrderPlacedHandler>()
-    .AddSingleton<AnalyticsOnOrderPlacedHandler>()
-    .AddSingleton<ShippingOnPaymentAuthorizedHandler>()
-    .AddSingleton<NotifyOnPaymentAuthorizedHandler>()
-    .AddSingleton<NotifyOnShipmentPreparedHandler>();
+    .AddScoped<InventoryOnOrderPlacedHandler>()
+    .AddScoped<PaymentOnOrderPlacedHandler>()
+    .AddScoped<AnalyticsOnOrderPlacedHandler>()
+    .AddScoped<ShippingOnPaymentAuthorizedHandler>()
+    .AddScoped<NotifyOnPaymentAuthorizedHandler>()
+    .AddScoped<NotifyOnShipmentPreparedHandler>()
+    .AddScoped<CancelOrderOnPaymentFailedHandler>();
 
 builder.Services.AddCap(capOptions =>
 {
@@ -73,6 +76,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<EcommerceDbContext>();
     await dbContext.Database.EnsureCreatedAsync();
+    await PaymentProcessingSchema.EnsureCreatedAsync(dbContext);
 }
 
 using (var scope = app.Services.CreateScope())
@@ -85,7 +89,9 @@ using (var scope = app.Services.CreateScope())
 await Task.Delay(300);
 
 var inventoryAdapter = app.Services.GetRequiredService<InMemoryInventoryAdapter>();
-var paymentAdapter = app.Services.GetRequiredService<InMemoryPaymentAdapter>();
+using var paymentScope = app.Services.CreateScope();
+var paymentDb = paymentScope.ServiceProvider.GetRequiredService<EcommerceDbContext>();
+var totalAuthorized = paymentDb.PaymentAuthorizations.AsEnumerable().Sum(x => x.Amount);
 var shippingAdapter = app.Services.GetRequiredService<InMemoryShippingAdapter>();
 var analyticsAdapter = app.Services.GetRequiredService<InMemoryAnalyticsAdapter>();
 var notificationAdapter = app.Services.GetRequiredService<ConsoleNotificationAdapter>();
@@ -93,7 +99,7 @@ var notificationAdapter = app.Services.GetRequiredService<ConsoleNotificationAda
 Console.WriteLine();
 Console.WriteLine("=== Projection / Adapter State ===");
 Console.WriteLine($"Reserved units: {inventoryAdapter.TotalReservedUnits}");
-Console.WriteLine($"Authorized amount: ${paymentAdapter.TotalAuthorized}");
+Console.WriteLine($"Authorized amount: ${totalAuthorized}");
 Console.WriteLine($"Shipments prepared: {shippingAdapter.ShipmentsPrepared}");
 Console.WriteLine($"Orders tracked: {analyticsAdapter.OrdersTracked}");
 Console.WriteLine($"Revenue tracked: ${analyticsAdapter.RevenueTracked}");

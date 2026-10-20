@@ -20,7 +20,7 @@ public sealed class EcommerceEventMetadataTests
 
         var orderPlaced = CreateOrderPlaced();
 
-        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
+        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, new TestPaymentProcessingStore(), NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
         var paymentAuthorized = Assert.IsType<PaymentAuthorized>(Assert.Single(eventBus.Events));
         Assert.Equal(orderPlaced.OrderId, eventBus.PublishCalls.Single().PartitionKey);
         AssertValidMetadata(paymentAuthorized, nameof(PaymentAuthorized), orderPlaced);
@@ -41,7 +41,7 @@ public sealed class EcommerceEventMetadataTests
 
         var orderPlaced = CreateOrderPlaced();
 
-        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
+        await new PaymentOnOrderPlacedHandler(paymentPort, eventBus, new TestPaymentProcessingStore(), NullLogger<PaymentOnOrderPlacedHandler>.Instance).HandleAsync(orderPlaced);
         var paymentFailed = Assert.IsType<PaymentFailed>(Assert.Single(eventBus.Events));
         Assert.Equal(orderPlaced.OrderId, eventBus.PublishCalls.Single().PartitionKey);
         AssertValidMetadata(paymentFailed, nameof(PaymentFailed), orderPlaced);
@@ -59,7 +59,7 @@ public sealed class EcommerceEventMetadataTests
         var dedup = new InMemoryDeduplicationStore();
         var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
         var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
-        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
+        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, new TestPaymentProcessingStore(), NullLogger<PaymentOnOrderPlacedHandler>.Instance);
         var orderPlaced = CreateOrderPlaced();
 
         await handler.HandleAsync(orderPlaced);
@@ -111,7 +111,7 @@ public sealed class EcommerceEventMetadataTests
         var dedup = new InMemoryDeduplicationStore();
         var sequenceGuardStore = new InMemoryConsumerSequenceGuardStore();
         var sequenceAllocator = new InMemoryOrderEventSequenceAllocator();
-        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, dedup, sequenceGuardStore, sequenceAllocator, NullLogger<PaymentOnOrderPlacedHandler>.Instance);
+        var handler = new PaymentOnOrderPlacedHandler(paymentPort, eventBus, new TestPaymentProcessingStore(), NullLogger<PaymentOnOrderPlacedHandler>.Instance);
 
         var order1 = CreateOrderPlaced();
         var order2 = CreateOrderPlaced() with { OrderId = "order-999" };
@@ -202,7 +202,7 @@ public sealed class EcommerceEventMetadataTests
             AuthorizeCalls++;
             if (shouldThrow)
             {
-                throw new InvalidOperationException("card declined");
+                throw new PaymentDeclinedException("card declined");
             }
         }
     }
